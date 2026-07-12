@@ -27,7 +27,7 @@ func newSnapshotCmd() *cobra.Command {
 			}
 
 			ctx := cmd.Context()
-			eng, err := core.Open(ctx, root)
+			eng, err := core.OpenOrInit(ctx, root)
 			if err != nil {
 				return err
 			}

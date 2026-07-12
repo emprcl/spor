@@ -20,8 +20,8 @@ import (
 // storageDir is the project-local directory spor owns.
 const storageDir = ".spor"
 
-// Engine holds an opened project store. Create it with Open and release it with
-// Close.
+// Engine holds an opened project store. Create it with OpenOrInit and release it
+// with Close.
 type Engine struct {
 	root     string
 	storeDir string
@@ -32,11 +32,74 @@ type Engine struct {
 	blobs *blob.Store
 }
 
-// Open prepares the store for the project rooted at root: it creates the .spor
-// layout, opens SQLite (WAL + pragmas), runs the schema-version gate and
-// migrations, and clears stale temp files (crash-recovery stub). See
-// docs/SPEC.md §3, §8.
-func Open(ctx context.Context, root string) (*Engine, error) {
+// Discover walks up from start looking for an existing project store (a .spor
+// directory), mirroring how Git finds .git. It returns the project root (the
+// directory containing .spor) and whether one was found. See docs/SPEC.md §8.
+func Discover(start string) (root string, found bool, err error) {
+	dir, err := filepath.Abs(start)
+	if err != nil {
+		return "", false, err
+	}
+	for {
+		info, statErr := os.Stat(filepath.Join(dir, storageDir))
+		if statErr == nil && info.IsDir() {
+			return dir, true, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir { // reached the filesystem root
+			return "", false, nil
+		}
+		dir = parent
+	}
+}
+
+// OpenOrInit opens the project store for the directory tree containing start. If
+// a store exists at or above start it is used (so running from a subdirectory
+// finds the real root). Otherwise a new store is created in start (implicit
+// init), unless the guard refuses it. This is the entry point for operations
+// that may create a store, such as snapshot. See docs/SPEC.md §8.
+func OpenOrInit(ctx context.Context, start string) (*Engine, error) {
+	root, found, err := Discover(start)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		root, err = filepath.Abs(start)
+		if err != nil {
+			return nil, err
+		}
+		if err := guardImplicitInit(root); err != nil {
+			return nil, err
+		}
+	}
+	return openAt(ctx, root)
+}
+
+// guardImplicitInit refuses to implicitly create a store in a directory that is
+// almost certainly not a project root: the filesystem root or the user's home
+// directory. This stops a stray command in the wrong place from snapshotting an
+// enormous tree.
+func guardImplicitInit(dir string) error {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	if filepath.Dir(abs) == abs {
+		return fmt.Errorf("refusing to create a spor store at the filesystem root %q; cd into a project directory first", abs)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		if absHome, err := filepath.Abs(home); err == nil && absHome == abs {
+			return fmt.Errorf("refusing to create a spor store directly in your home directory (%s); cd into a project directory first", abs)
+		}
+	}
+	return nil
+}
+
+// openAt prepares the store rooted at root: it creates the .spor layout, opens
+// SQLite (WAL + pragmas), runs the schema-version gate and migrations, and clears
+// stale temp files (crash-recovery stub). root is used as-is; discovery and the
+// init guard are handled by the callers above. See docs/SPEC.md §3, §8.
+func openAt(ctx context.Context, root string) (*Engine, error) {
 	storeDir := filepath.Join(root, storageDir)
 	blobsDir := filepath.Join(storeDir, "blobs")
 	tmpDir := filepath.Join(storeDir, "tmp")

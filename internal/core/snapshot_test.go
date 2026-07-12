@@ -11,9 +11,9 @@ import (
 func newTestEngine(t *testing.T) (*Engine, string) {
 	t.Helper()
 	root := t.TempDir()
-	eng, err := Open(context.Background(), root)
+	eng, err := OpenOrInit(context.Background(), root)
 	if err != nil {
-		t.Fatalf("Open: %v", err)
+		t.Fatalf("OpenOrInit: %v", err)
 	}
 	t.Cleanup(func() { eng.Close() })
 	return eng, root
