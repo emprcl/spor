@@ -16,10 +16,12 @@ complete contents of the project at one moment.
 
 Experience:
 
-- The user starts `spor` on a project directory; it watches the filesystem
-  continuously.
-- Every change, once activity settles, becomes a new state automatically. The
-  user never commits.
+- States are created by a single **snapshot** operation, triggered either
+  manually (`spor snapshot`) or automatically by a watcher that runs while
+  `spor start` is open. Either way the user never writes a commit message or
+  stages anything.
+- Recording happens *while `spor` is running*, in the foreground — closing it
+  stops watching. There is no hidden background daemon.
 - Restoring an old state is one command.
 - Editing a restored state simply starts a new timeline — no branch is created or
   exposed.
@@ -109,18 +111,31 @@ re-stored.
 
 ## 4. Recording
 
-New states are created automatically by watching the filesystem.
+### The snapshot operation
 
-### The walk is the source of truth, not events
+Every state is created by one core operation — **snapshot** — regardless of
+trigger: **walk the whole tree**, hash every tracked file, write any new blobs,
+create a state under `HEAD`, advance `HEAD`. It rebuilds the manifest from what is
+actually on disk rather than trusting file events (which are lossy — dropped on
+buffer overflow, scrambled by atomic saves), so deletions, renames, and missed
+events fall out for free.
 
-`spor` uses native notifications (fsnotify), but **events are only a trigger.**
-They are lossy — buffers overflow, atomic saves and renames fire confusingly,
-some editors emit nothing clean. So on each settle, `spor` **walks the whole
-project tree**, hashes every tracked file, and rebuilds the manifest from what is
-actually on disk. This makes deletions, renames, and missed events fall out for
-free.
+Two triggers call it:
 
-### Processing pipeline
+- **Manual** — `spor snapshot` runs it once and exits. spor is fully usable this
+  way with no watcher (a deliberate, git-like rhythm; also what makes it
+  scriptable and testable).
+- **Automatic** — the watcher calls it when the filesystem settles (below).
+
+**No-op suppression** is part of the operation: if the new manifest hash equals
+`HEAD`'s, no state is created. So repeated snapshots with nothing changed, mtime
+touches, saves-in-place, and sub-second edit-then-revert fumbles all record
+nothing.
+
+### The watcher: automatic triggering
+
+While `spor start` runs, a watcher turns filesystem activity into snapshots
+through one serial pipeline:
 
 ```
 fs events ──► "dirty" signal ──► debounce timer ──► [ snapshot job ] ──► single worker
@@ -128,30 +143,21 @@ fs events ──► "dirty" signal ──► debounce timer ──► [ snapshot
               changed)            fires after quiet)    pending)           hash, write, commit)
 ```
 
-- **Debounce and the serial worker solve different problems.** Debounce decides
-  *when* the project is consistent to snapshot (files fully written, a multi-file
-  change complete); the single worker ensures snapshots run *one at a time*,
-  never racing the SQLite writer. Both are required.
-- **At most one pending job.** A job carries no payload — it always means "walk
-  and reconcile to disk *now*," so two pending jobs are redundant. Coalesce to
-  one (a dirty flag / capacity-1 slot); never enqueue one job per event.
+- **Debounce vs the serial worker — different jobs.** Debounce decides *when* the
+  project is consistent to snapshot (files fully written, a multi-file change
+  complete); the single worker ensures snapshots run one at a time. Both required.
+- **At most one pending job.** A job means only "reconcile to disk now," so two
+  are redundant — coalesce to one (a dirty flag / capacity-1 slot), never one job
+  per event.
 - **The dirty flag closes the walk-to-idle race.** A change landing after the
-  worker finished walking but before it goes idle was *not* captured, yet a naive
-  "skip if busy" check assumes it was. So any event during the whole job window
-  sets `dirty`, and the worker checks it **atomically as it goes idle**, re-running
-  if set. Nothing is ever silently missed.
+  worker walked but before it goes idle wasn't captured, yet "skip if busy" would
+  assume it was. So any event during the job sets `dirty`, checked atomically as
+  the worker goes idle; if set, it re-runs. Nothing is silently missed.
 - **Max-debounce cap.** A pure quiet-timer never fires during a continuous writer
-  (a long render). Cap it to snapshot at least every M seconds so long streams
-  still produce intermediate states.
+  (a long render), so cap it to snapshot at least every M seconds.
 
-Settle window: short enough to feel instant (~200–500 ms), long enough to outlast
-an atomic-save burst or a project-wide save-all.
-
-### No-op suppression
-
-After the walk, if the new manifest hash equals `HEAD`'s, no state is created.
-This absorbs mtime touches, saves-in-place, and sub-second edit-then-revert
-fumbles without flooding history.
+Settle window: instant-feeling (~200–500 ms) but long enough to outlast an
+atomic-save burst or a project-wide save-all.
 
 ### Watch mechanics & ignore rules
 
@@ -226,8 +232,8 @@ The command surface is deliberately small and **undo-flavored**, not Git-flavore
 There is no `commit` (recording is automatic), no `branch` (branching is
 implicit), and no `reset`/`discard` (nothing is ever lost, so there is nothing to
 discard). Anything framed as "working dir vs current state" is a dead concept:
-the daemon auto-snapshots within the settle window, so the working tree is
-continuously kept identical to `@`.
+while `spor start` is watching, snapshots happen within the settle window, so the
+working tree is continuously kept identical to `@`.
 
 ### Referring to a state — `<ref>`
 
@@ -260,10 +266,16 @@ and any working-dir diff are no-ops and are not use cases.
 
 | Command | Effect |
 |---|---|
-| `spor start` / `spor stop` | begin / end watching this directory (starts/stops the daemon) |
+| `spor start` | run the watcher in the foreground with a **live log** of the tree building itself; Ctrl+C stops watching |
+| `spor snapshot [-m <label>]` | create one state now, then exit — the watcher-free, scriptable path |
 | `spor log` | show the timeline as a **tree** (branches visible), newest first, marking `@` |
 | `spor undo [n]` / `spor redo [n]` | step back / forward `n` states |
 | `spor restore <ref>` | jump to any state |
+
+`spor start` is, for v1, a live monitor only — it shows states appearing, the
+settle indicator, and where `@` is. A full interactive TUI (navigating and
+driving restore/prune/label from within it) is deferred; until then, mutations
+are one-shot CLI commands.
 
 `redo` is intentionally simple: it follows the **most-recently-visited child**.
 Because editing after an `undo` starts a new branch (the old "future" is never
@@ -276,7 +288,7 @@ lost), other branches are reached via `spor log` + `restore`, not `redo`.
 | `spor label <ref> <name>` | name a state for easy reference |
 | `spor diff <ref>` | changes from `<ref>` **to `@`** ("what's changed since then") |
 | `spor diff <a> <b>` | changes between two states |
-| `spor status` | daemon state and where `@` is |
+| `spor status` | whether a watcher is running and where `@` is |
 
 Diff always compares **two points in history**; it never diffs against the
 working tree.
@@ -360,14 +372,53 @@ Tombstones are out of scope for v1.
 Correctness is prioritized over performance. Existing states must never become
 corrupted; only the single state being created during a crash may be lost.
 
-### Process model
+### Process model — core engine + front-ends
 
-The **watcher daemon owns everything** — the SQLite writer, the filesystem
-watches, and the debounce timer. CLI commands (`spor restore`, `spor apply`,
-`spor push`, …) are thin clients routing through it. This lets the daemon drain
-its pending timer before acting (see Restore) and avoids multi-writer
-coordination (WAL allows many readers, one writer). A command running without a
-live daemon takes an exclusive lockfile.
+There is **no daemon.** All behavior lives in a UI-agnostic **core engine** (a Go
+package) owning the operations (snapshot, restore, apply, prune, compact, gc,
+diff, log, label, verify), ref resolution, and locking. Three unprivileged
+front-ends call it:
+
+- **One-shot CLI** (`spor snapshot`, `spor restore`, …) — open store, call one op,
+  exit.
+- **The watcher** (`spor start`) — a foreground process whose debounce timer calls
+  `snapshot` on settle, alongside the live log. Ctrl+C stops it.
+- **A future TUI** — interactive keys calling the same ops.
+
+### Locking
+
+Three layers, no process management:
+
+1. **SQLite's own locking** protects the DB file — WAL gives many readers plus one
+   writer, and a second writer waits (not errors) with `PRAGMA busy_timeout`.
+   Necessary but not sufficient: a snapshot writes blobs before its transaction
+   and a restore materializes files outside any transaction, so it can't serialize
+   whole operations or the `HEAD` read-modify-write.
+
+2. **Two advisory file locks** (`flock(2)`; in Go `github.com/gofrs/flock`, with
+   `LockFileEx` on Windows), whose decisive property is that the kernel releases
+   them on process exit — *including crash or `SIGKILL`* — so there are no stale
+   locks to clean up. The files (`.spor/write.lock`, `.spor/watcher.lock`) are
+   empty; contents are only a `spor status` diagnostic.
+   - **Write lock** — held by the core for the *duration of each mutating
+     operation*, so all front-ends serialize; reads never take it (so
+     `log`/`diff`/`status` always work). Being per-operation, a one-shot
+     `spor restore` runs *while* `spor start` watches — they serialize, the restore
+     completes under the lock (force-settle included), and the watcher's next
+     settle sees the restored tree as a no-op. Acquired blocking with a short
+     timeout.
+   - **Watcher lock** — held by `spor start` for its lifetime, so a project has at
+     most one watcher. Acquired non-blocking, so a second `spor start` fails
+     immediately.
+
+3. **Atomic file replacement** (temp → `fsync` → rename), for blobs and the DB —
+   the pattern Git uses for its `*.lock` files. Not a mutex; it makes individual
+   writes atomic. Blob writes need no write lock: content-addressed temp+rename is
+   idempotent, so concurrent identical writes are harmless.
+
+Avoided: `O_CREAT|O_EXCL` process lockfiles (stale on `SIGKILL`, forcing liveness
+checks) and holding a long SQLite transaction as the app lock. Advisory locks are
+unreliable on network filesystems, but SQLite already requires a local one.
 
 ### Write ordering & atomicity
 
@@ -379,9 +430,10 @@ live daemon takes an exclusive lockfile.
 
 ### Crash recovery
 
-On startup: remove abandoned temp files; incomplete state creations are
-automatically discarded (nothing was committed); leftover blobs are orphans;
-verify basic consistency; resume watching.
+Whenever the store is opened, recovery runs first: remove abandoned temp files;
+incomplete state creations are automatically discarded (nothing was committed);
+leftover blobs are orphans; verify basic consistency. Only then does the caller
+(a one-shot command or `spor start`) proceed.
 
 ### Garbage collection
 
