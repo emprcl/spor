@@ -170,7 +170,7 @@ fumbles without flooding history.
 All operations produce or remove whole states. History editing (prune, compact)
 is **destructive but never rewriting**: it removes states from the tree but never
 alters what a surviving state contains. Both rely on opaque State IDs (no ID
-cascade on re-parent) and on GC (§7) to reclaim now-unreferenced blobs.
+cascade on re-parent) and on GC (§8) to reclaim now-unreferenced blobs.
 
 ### Restore
 
@@ -220,7 +220,106 @@ profiling demands.
 
 ---
 
-## 6. Sync
+## 6. CLI & UX
+
+The command surface is deliberately small and **undo-flavored**, not Git-flavored.
+There is no `commit` (recording is automatic), no `branch` (branching is
+implicit), and no `reset`/`discard` (nothing is ever lost, so there is nothing to
+discard). Anything framed as "working dir vs current state" is a dead concept:
+the daemon auto-snapshots within the settle window, so the working tree is
+continuously kept identical to `@`.
+
+### Referring to a state — `<ref>`
+
+| Ref | Means |
+|---|---|
+| `@` | the current state (HEAD) |
+| `@~n` | `n` states back along `@`'s ancestor line |
+| `01ARZ7` | short ULID prefix |
+| `mylabel` | a state the user named |
+| `2h ago`, `yesterday`, `"friday 3pm"` | a time (the word `ago` is optional) |
+
+Trailing positional args are joined into the ref, so `spor restore 2h ago` works
+without quoting. A bare token is resolved in this precedence:
+
+1. `@` / `@~n` — explicit sigils
+2. exact **label** match (a label named `2h` wins over the duration)
+3. parses as a **time**
+4. **ULID prefix**
+
+**Time rewinds `@`'s own timeline**, not the whole tree: `2h ago` finds the
+ancestor of `@` that was current ~2h ago, never some abandoned branch.
+
+`@` is only useful as an *operand that names the current state* (`label @ …`,
+`compact @~5 @`, `prune @`, and the implicit "to now" end of a diff). `restore @`
+and any working-dir diff are no-ops and are not use cases.
+
+### Commands
+
+**Everyday** (nearly all usage):
+
+| Command | Effect |
+|---|---|
+| `spor start` / `spor stop` | begin / end watching this directory (starts/stops the daemon) |
+| `spor log` | show the timeline as a **tree** (branches visible), newest first, marking `@` |
+| `spor undo [n]` / `spor redo [n]` | step back / forward `n` states |
+| `spor restore <ref>` | jump to any state |
+
+`redo` is intentionally simple: it follows the **most-recently-visited child**.
+Because editing after an `undo` starts a new branch (the old "future" is never
+lost), other branches are reached via `spor log` + `restore`, not `redo`.
+
+**Naming & inspecting:**
+
+| Command | Effect |
+|---|---|
+| `spor label <ref> <name>` | name a state for easy reference |
+| `spor diff <ref>` | changes from `<ref>` **to `@`** ("what's changed since then") |
+| `spor diff <a> <b>` | changes between two states |
+| `spor status` | daemon state and where `@` is |
+
+Diff always compares **two points in history**; it never diffs against the
+working tree.
+
+**History editing** (occasional, destructive):
+
+| Command | Effect |
+|---|---|
+| `spor prune <ref>` | delete a state **and all its descendants**; HEAD moves to its parent |
+| `spor compact <a> <b>` | squash the linear range `a`…`b` into one state |
+
+`prune` and `undo` look identical when `@` is a leaf but are not the same —
+`undo` is a reversible cursor move, `prune @` **destroys** the state:
+
+| | HEAD goes to | The state | Reversible |
+|---|---|---|---|
+| `spor undo` | parent | stays in history | yes (`redo`) |
+| `spor prune @` | parent | destroyed (blobs GC'd) | no |
+
+Because `prune` deletes a whole subtree: on a **leaf** `@` it drops just that one
+state (the "rewind and delete the last state" case); on a **non-leaf** `@` (after
+an undo/restore without editing) it drops the entire forward branch; on the
+**root** it wipes all history. `prune` should feel heavy — confirm destructive
+cases and report exactly what will be destroyed.
+
+**Sync** (optional — see §7):
+
+| Command | Effect |
+|---|---|
+| `spor push` / `spor pull` | sync states and blobs with the server |
+| `spor remote add <url>` | configure the server |
+| `spor remote prune <ref>` | delete a subtree **on the server** (sync is otherwise additive-only) |
+
+**Maintenance** (rare; GC is mostly automatic):
+
+| Command | Effect |
+|---|---|
+| `spor verify` | integrity check (see §8) |
+| `spor gc` | reclaim unreferenced blobs |
+
+---
+
+## 7. Sync
 
 Optional single-user **push/pull** to a server, purely for backup and moving
 history between the same user's machines. **No collaboration** — one author, no
@@ -256,7 +355,7 @@ Tombstones are out of scope for v1.
 
 ---
 
-## 7. Runtime & Integrity
+## 8. Runtime & Integrity
 
 Correctness is prioritized over performance. Existing states must never become
 corrupted; only the single state being created during a crash may be lost.
@@ -301,7 +400,7 @@ resolves to a real state; and the parent graph is acyclic.
 
 ---
 
-## 8. Design Principles
+## 9. Design Principles
 
 - Automatic by default — no manual commits, no visible branches, no staging.
 - State *contents* are immutable; history may be explicitly pruned or compacted,
