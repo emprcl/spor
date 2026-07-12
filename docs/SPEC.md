@@ -77,6 +77,26 @@ the next state descends from the restored state, not the previous tip.
 
 ## 3. Storage
 
+### Project root and implicit init
+
+The store lives in a `.spor/` directory at the project root:
+
+```
+.spor/
+  spor.db            SQLite (WAL)
+  blobs/<sha256>     zstd-compressed, content-addressed objects
+  tmp/               staging for temp → rename
+  write.lock         advisory write lock (§8)
+```
+
+There is no `init` command: the first `snapshot` (or `spor start`) creates this
+layout implicitly. Commands find the project root by walking up from the working
+directory to the nearest `.spor/`, the way Git finds `.git/`, so running from a
+subdirectory operates on the whole project instead of creating a nested store.
+Implicit creation is guarded: spor refuses to create a store directly in the
+filesystem root or the user's home directory, so a stray command cannot start
+snapshotting an enormous tree.
+
 ### Metadata: SQLite (WAL mode)
 
 Stores state rows (id, timestamp, parent, manifest hash), manifests, the `HEAD`
@@ -133,6 +153,24 @@ Two triggers call it:
 touches, saves-in-place, and sub-second edit-then-revert fumbles all record
 nothing.
 
+### Ignoring files
+
+The walk excludes files that should not be versioned, resolved in this order:
+
+- **`.spor/` is always excluded** and cannot be re-included; it is spor's own
+  store, and versioning it would be self-referential.
+- **Built-in defaults**: the `.git/` directory (high-churn, tool-owned, and
+  meaningless to version) and common editor/OS temp files (`*.tmp`, `*~`,
+  `*.swp`, `*.swo`, `.DS_Store`, `4913`).
+- **`.sporignore`**: an optional file at the project root using full gitignore
+  syntax (globs, `**`, anchoring, directory-only `foo/`, `#` comments, and `!`
+  negation). It is layered after the defaults, so a project can re-include a
+  default (e.g. `!keep.tmp`).
+
+Matched directories are pruned wholesale (e.g. `node_modules/`), never walked.
+`.sporignore` is itself tracked, like `.gitignore`, and spor never creates it
+(it is opt-in). Nested per-directory ignore files are out of scope for v1.
+
 ### The watcher: automatic triggering
 
 While `spor start` runs, a watcher turns filesystem activity into snapshots
@@ -160,15 +198,14 @@ fs events ──► "dirty" signal ──► debounce timer ──► [ snapshot
 Settle window: instant-feeling (~200-500 ms) but long enough to outlast an
 atomic-save burst or a project-wide save-all.
 
-### Watch mechanics & ignore rules
+### Watch mechanics
 
 - On Linux, inotify watches are **per-directory**: walk and add watches for every
   subdirectory, and for new directories as they appear.
-- Always exclude `spor`'s own storage directory (avoids recursive events).
-- Ignoring is mandatory, creative projects emit gigabytes of derived artifacts.
-  Ignore editor temp/swap files (`*.tmp`, `*~`, `.DS_Store`, `4913`) and
-  user-supplied, gitignore-style patterns (build output, caches, `node_modules`,
-  exported media).
+- The watcher does not watch `spor`'s own storage directory (avoids recursive
+  events).
+- The same ignore rules the walk applies (above) keep derived artifacts, which
+  creative projects emit in bulk, from triggering snapshots.
 
 ---
 

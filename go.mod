@@ -4,6 +4,7 @@ go 1.25.7
 
 require (
 	github.com/charmbracelet/fang v1.0.0
+	github.com/git-pkgs/gitignore v1.2.0
 	github.com/gofrs/flock v0.13.0
 	github.com/klauspost/compress v1.19.0
 	github.com/oklog/ulid/v2 v2.1.1

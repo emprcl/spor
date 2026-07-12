@@ -37,6 +37,74 @@ func TestWalkSkipsStorageAndTempFiles(t *testing.T) {
 	}
 }
 
+func TestWalkRespectsSporignore(t *testing.T) {
+	root := t.TempDir()
+
+	writeFile(t, root, "main.go", "package main")
+	writeFile(t, root, "keep.txt", "keep")
+	writeFile(t, root, "debug.log", "noise")            // ignored by *.log
+	writeFile(t, root, "build/out.bin", "artifact")     // ignored by build/
+	writeFile(t, root, "node_modules/dep/index.js", "") // ignored by node_modules/
+	writeFile(t, root, "src/app.log", "nested log")     // ignored by *.log at any depth
+
+	writeFile(t, root, ".sporignore", "# generated stuff\n*.log\nbuild/\nnode_modules/\n")
+
+	files, err := Walk(root)
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	var got []string
+	for _, f := range files {
+		got = append(got, f.Rel)
+	}
+	// .sporignore itself is tracked (like .gitignore), ignored paths are gone.
+	want := []string{".sporignore", "keep.txt", "main.go"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Walk = %v, want %v", got, want)
+	}
+}
+
+func TestWalkIgnoresGitByDefault(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "main.go", "package main")
+	writeFile(t, root, ".gitignore", "node_modules/")  // a project file: tracked
+	writeFile(t, root, ".git/config", "[core]")        // git internals: ignored
+	writeFile(t, root, ".git/objects/ab/cdef", "blob") // ignored, no .sporignore needed
+
+	files, err := Walk(root)
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	var got []string
+	for _, f := range files {
+		got = append(got, f.Rel)
+	}
+	want := []string{".gitignore", "main.go"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Walk = %v, want %v", got, want)
+	}
+}
+
+func TestWalkNegationReincludes(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "scratch.tmp", "a") // ignored by the *.tmp default
+	writeFile(t, root, "keep.tmp", "b")    // re-included by .sporignore negation
+	writeFile(t, root, ".sporignore", "!keep.tmp\n")
+
+	files, err := Walk(root)
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	var got []string
+	for _, f := range files {
+		got = append(got, f.Rel)
+	}
+	want := []string{".sporignore", "keep.tmp"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Walk = %v, want %v", got, want)
+	}
+}
+
 func TestWalkRelPathsAreSlashSeparated(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, filepath.Join("a", "b", "c.txt"), "x")
