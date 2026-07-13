@@ -19,7 +19,13 @@ func newRestoreCmd() *cobra.Command {
 		Short: "Jump the project back to a past state",
 		Long: "Materialize a past state into the working directory. Any uncommitted " +
 			"changes are recorded as their own state first, so the jump is always " +
-			"undoable. A <ref> is @, @~n, a label, a time like \"2h ago\", or a state id.",
+			"undoable.\n\n" +
+			"A <ref> selects the state to restore:\n" +
+			"  @~n          n states back from the current one\n" +
+			"  <label>      a state named with 'snapshot -m'\n" +
+			"  <time>       how long ago, e.g. \"2h ago\" or \"3d\"\n" +
+			"               (units: s, m, h, d; the word \"ago\" is optional)\n" +
+			"  <id>         a state id, or just its first few characters",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := strings.Join(args, " ")

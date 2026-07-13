@@ -114,6 +114,44 @@ func TestResolveTimeRewindsTimeline(t *testing.T) {
 	}
 }
 
+// TestParseTimeRef covers the accepted time units (s, m, h, d), the optional
+// "ago", and rejection of non-time refs so they fall through to the id-prefix
+// step.
+func TestParseTimeRef(t *testing.T) {
+	now := time.Now()
+	cases := []struct {
+		ref  string
+		back time.Duration // how far before now it should name
+		ok   bool
+	}{
+		{"0s", 0, true},
+		{"45s ago", 45 * time.Second, true},
+		{"90m", 90 * time.Minute, true},
+		{"2h ago", 2 * time.Hour, true},
+		{"1h30m", 90 * time.Minute, true},
+		{"3d", 3 * 24 * time.Hour, true},
+		{"1d ago", 24 * time.Hour, true},
+		{"1.5d", 36 * time.Hour, true},
+		{"yesterday", 0, false},
+		{"", 0, false},
+		{"01ARZ", 0, false}, // a ULID-ish prefix is not a time
+		{"5", 0, false},     // a bare number has no unit
+	}
+	for _, c := range cases {
+		got, ok := parseTimeRef(c.ref)
+		if ok != c.ok {
+			t.Fatalf("parseTimeRef(%q) ok = %v, want %v", c.ref, ok, c.ok)
+		}
+		if !ok {
+			continue
+		}
+		want := now.Add(-c.back)
+		if d := got.Sub(want); d > time.Second || d < -time.Second {
+			t.Fatalf("parseTimeRef(%q) = %v, want ~%v", c.ref, got, want)
+		}
+	}
+}
+
 // TestResolvePrefix covers ULID-prefix matching and its error cases.
 func TestResolvePrefix(t *testing.T) {
 	eng, root := newTestEngine(t)

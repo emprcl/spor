@@ -21,9 +21,10 @@ import (
 //     timeline;
 //  4. a ULID prefix.
 //
-// It is a pure read and takes no lock. Natural-language times ("yesterday",
-// "friday 3pm") are not parsed yet; only Go durations are, which covers the
-// common "2h ago" form. Anything else falls through to the ULID-prefix step.
+// It is a pure read and takes no lock. Times are a duration back from now in
+// seconds, minutes, hours, or days ("2h ago", "3d"); calendar words like
+// "yesterday" or "friday 3pm" are not parsed yet. Anything not recognized as a
+// time falls through to the ULID-prefix step.
 func (e *Engine) Resolve(ctx context.Context, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
@@ -149,20 +150,38 @@ func resolvePrefix(ref string, states []gen.ListStatesRow) (string, error) {
 	}
 }
 
-// parseTimeRef parses a duration-style time ref such as "2h ago" or "90m",
-// returning the absolute instant it names. The trailing "ago" is optional (as in
-// the spec's examples). It reports ok == false for anything that is not a
-// non-negative Go duration, so the caller can fall through to the next ref kind.
+// parseTimeRef parses a duration-style time ref such as "2h ago", "90m", or
+// "3d", returning the absolute instant it names. The trailing "ago" is optional
+// (as in the spec's examples). It reports ok == false for anything that is not a
+// recognized non-negative duration, so the caller can fall through to the next
+// ref kind.
 func parseTimeRef(ref string) (time.Time, bool) {
-	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(ref), "ago"))
+	s := strings.ToLower(strings.TrimSpace(ref))
+	s = strings.TrimSpace(strings.TrimSuffix(s, "ago"))
 	if s == "" {
 		return time.Time{}, false
 	}
-	d, err := time.ParseDuration(s)
-	if err != nil || d < 0 {
+	d, ok := parseDuration(s)
+	if !ok {
 		return time.Time{}, false
 	}
 	return time.Now().Add(-d), true
+}
+
+// parseDuration accepts a non-negative Go duration (units up to hours, possibly
+// compound like "1h30m") or a bare day count ("3d", "1.5d") that extends
+// time.ParseDuration, which has no day unit. Supported units are therefore
+// seconds, minutes, hours, and days.
+func parseDuration(s string) (time.Duration, bool) {
+	if d, err := time.ParseDuration(s); err == nil && d >= 0 {
+		return d, true
+	}
+	if rest, isDay := strings.CutSuffix(s, "d"); isDay {
+		if n, err := strconv.ParseFloat(rest, 64); err == nil && n >= 0 {
+			return time.Duration(n * float64(24*time.Hour)), true
+		}
+	}
+	return 0, false
 }
 
 // indexStates keys states by id for parent-chain walks.
