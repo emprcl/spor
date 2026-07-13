@@ -15,6 +15,7 @@ import (
 	"github.com/emprcl/spor/internal/blob"
 	"github.com/emprcl/spor/internal/db"
 	"github.com/emprcl/spor/internal/db/gen"
+	"github.com/emprcl/spor/internal/lock"
 )
 
 // storageDir is the project-local directory spor owns.
@@ -170,9 +171,28 @@ func (e *Engine) Close() error {
 	return e.db.Close()
 }
 
+// Root returns the project root directory (the parent of .spor). The watcher
+// needs it to place its per-directory watches on the whole tree, not just the
+// directory a command happened to run from.
+func (e *Engine) Root() string {
+	return e.root
+}
+
 // writeLockPath is the flock target for the per-operation write lock.
 func (e *Engine) writeLockPath() string {
 	return filepath.Join(e.storeDir, "write.lock")
+}
+
+// watcherLockPath is the flock target for the lifetime watcher lock.
+func (e *Engine) watcherLockPath() string {
+	return filepath.Join(e.storeDir, "watcher.lock")
+}
+
+// AcquireWatcher takes the project's watcher lock without blocking, so a second
+// `spor start` fails immediately (docs/SPEC.md §8). Hold the returned lock for
+// the watcher's lifetime and release it on stop.
+func (e *Engine) AcquireWatcher() (*lock.Watcher, error) {
+	return lock.AcquireWatcher(e.watcherLockPath())
 }
 
 // dsn builds the modernc SQLite connection string with the pragmas spor relies

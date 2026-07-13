@@ -19,6 +19,7 @@ func Root() *cobra.Command {
 		SilenceErrors: true,
 	}
 
+	root.AddCommand(newStartCmd())
 	root.AddCommand(newSnapshotCmd())
 	root.AddCommand(newLogCmd())
 	root.AddCommand(newRestoreCmd())

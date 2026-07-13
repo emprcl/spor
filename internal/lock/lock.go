@@ -47,3 +47,34 @@ func AcquireWrite(ctx context.Context, path string) (*Write, error) {
 func (w *Write) Release() error {
 	return w.fl.Unlock()
 }
+
+// ErrWatcherRunning is returned when the watcher lock is already held, meaning a
+// `spor start` is already watching this project.
+var ErrWatcherRunning = errors.New("a watcher is already running for this project")
+
+// Watcher is the lifetime lock held by `spor start`, so a project has at most one
+// watcher (docs/SPEC.md §8). It is acquired non-blocking: a second `spor start`
+// fails immediately rather than queuing.
+type Watcher struct {
+	fl *flock.Flock
+}
+
+// AcquireWatcher takes the watcher lock at path without blocking, returning
+// ErrWatcherRunning if another watcher already holds it. Hold it for the
+// watcher's lifetime and Release on stop; the kernel also drops it on exit.
+func AcquireWatcher(path string) (*Watcher, error) {
+	fl := flock.New(path)
+	locked, err := fl.TryLock()
+	if err != nil {
+		return nil, err
+	}
+	if !locked {
+		return nil, ErrWatcherRunning
+	}
+	return &Watcher{fl: fl}, nil
+}
+
+// Release unlocks the watcher lock.
+func (w *Watcher) Release() error {
+	return w.fl.Unlock()
+}

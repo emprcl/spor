@@ -61,12 +61,7 @@ var defaultIgnorePatterns = []byte(`.git/
 // never an error. Anything else (permissions, I/O) aborts: fix the file or
 // ignore it via .sporignore. See docs/SPEC.md §4.
 func Walk(root string) ([]File, error) {
-	m := gitignore.New("")
-	m.AddPatterns(defaultIgnorePatterns, "")
-	ignorePath := filepath.Join(root, IgnoreFile)
-	if _, err := os.Stat(ignorePath); err == nil {
-		m.AddFromFile(ignorePath, "")
-	}
+	m := newMatcher(root)
 
 	var files []File
 	err := filepath.WalkDir(root, func(abs string, d fs.DirEntry, err error) error {
@@ -126,4 +121,37 @@ func Walk(root string) ([]File, error) {
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Rel < files[j].Rel })
 	return files, nil
+}
+
+// newMatcher builds the ignore matcher for root: the built-in defaults layered
+// with the project's .sporignore (if present), exactly as Walk applies them.
+func newMatcher(root string) *gitignore.Matcher {
+	m := gitignore.New("")
+	m.AddPatterns(defaultIgnorePatterns, "")
+	ignorePath := filepath.Join(root, IgnoreFile)
+	if _, err := os.Stat(ignorePath); err == nil {
+		m.AddFromFile(ignorePath, "")
+	}
+	return m
+}
+
+// Matcher decides whether a project-relative path is ignored, combining the
+// built-in defaults with the project's .sporignore. It lets the watcher reuse
+// exactly the walk's ignore rules (docs/SPEC.md §4) when placing watches and
+// filtering events. It does not know about the always-excluded .spor directory;
+// callers handle that themselves (via StorageDir), as Walk does.
+type Matcher struct {
+	m *gitignore.Matcher
+}
+
+// NewMatcher builds a Matcher for the project rooted at root.
+func NewMatcher(root string) *Matcher {
+	return &Matcher{m: newMatcher(root)}
+}
+
+// Ignored reports whether the slash-separated, root-relative path rel is
+// excluded. isDir must say whether rel is a directory, so directory-only
+// patterns (foo/) match correctly.
+func (m *Matcher) Ignored(rel string, isDir bool) bool {
+	return m.m.MatchPath(rel, isDir)
 }

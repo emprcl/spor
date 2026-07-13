@@ -6,6 +6,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.5
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/charmbracelet/fang v1.0.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/git-pkgs/gitignore v1.2.0
 	github.com/gofrs/flock v0.13.0
 	github.com/klauspost/compress v1.19.0

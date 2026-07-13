@@ -171,3 +171,30 @@ func writeFile(t *testing.T, root, rel, content string) {
 		t.Fatal(err)
 	}
 }
+
+// TestMatcherMatchesWalkRules checks the exposed matcher applies the same
+// defaults and .sporignore layering the walk uses, so the watcher filters events
+// identically.
+func TestMatcherMatchesWalkRules(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, IgnoreFile, "build/\n!keep.tmp\n")
+
+	m := NewMatcher(root)
+	cases := []struct {
+		rel     string
+		isDir   bool
+		ignored bool
+	}{
+		{"main.go", false, false},    // tracked
+		{"notes.tmp", false, true},   // built-in *.tmp default
+		{"keep.tmp", false, false},   // re-included by .sporignore negation
+		{"build", true, true},        // directory-only rule from .sporignore
+		{"src/app.js", false, false}, // nested tracked
+		{".git", true, true},         // built-in .git default
+	}
+	for _, c := range cases {
+		if got := m.Ignored(c.rel, c.isDir); got != c.ignored {
+			t.Errorf("Ignored(%q, isDir=%v) = %v, want %v", c.rel, c.isDir, got, c.ignored)
+		}
+	}
+}
