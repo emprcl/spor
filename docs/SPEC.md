@@ -45,7 +45,9 @@ A state is immutable in content and contains:
 - **manifest**, a map of every tracked file path to its blob hash plus one
   preserved permission bit (executable)
 - **manifest hash**, stored for fast equality checks
-- **label**, an optional user-given name (§6); mutable metadata, part of no hash
+- **label**, an optional user-given name (§6), unique across states like the id
+  (unlabeled states are simply absent from that namespace); mutable metadata,
+  part of no hash
 
 Once created, a state's manifest and blobs never change. Its parent link *may*
 be changed by explicit history operations (§5).
@@ -398,7 +400,7 @@ settle window, so the working tree is continuously kept identical to `@`.
 | `@~n` | `n` states back along `@`'s ancestor line |
 | `01ARZ7` | short ULID prefix |
 | `mylabel` | a state the user named |
-| `2h ago`, `yesterday`, `"friday 3pm"` | a time (the word `ago` is optional) |
+| `2h ago`, `3d`, `yesterday`, `"friday 3pm"` | a time (the word `ago` is optional) |
 
 Trailing positional args are joined into the ref, so `spor restore 2h ago`
 works without quoting. A bare token is resolved in this precedence:
@@ -407,6 +409,10 @@ works without quoting. A bare token is resolved in this precedence:
 2. exact **label** match (a label named `2h` wins over the duration)
 3. parses as a **time**
 4. **ULID prefix**
+
+For v1 a time is a duration back from now, in seconds, minutes, hours, or days
+(`s`, `m`, `h`, `d`); calendar phrases like `yesterday` or `"friday 3pm"` are
+deferred and fall through to the ULID-prefix step until a date parser lands.
 
 **Time rewinds `@`'s own timeline**, not the whole tree: a time `T` resolves to
 the deepest ancestor of `@` created at or before `T`, never some abandoned
@@ -424,7 +430,7 @@ well defined even after a restore to an old state.
 | Command | Effect |
 |---|---|
 | `spor start` | run the watcher in the foreground with a **live log** of the tree building itself; Ctrl+C stops watching |
-| `spor snapshot [-m <label>]` | create one state now, then exit; the watcher-free, scriptable path |
+| `spor snapshot [-l <label>]` | create one state now, then exit; the watcher-free, scriptable path |
 | `spor log` | show the timeline as a **tree** (branches visible), newest first, marking `@` |
 | `spor undo [n]` / `spor redo [n]` | step back / forward `n` states |
 | `spor restore <ref>` | jump to any state |
@@ -443,7 +449,7 @@ reached via `spor log` + `restore`, not `redo`.
 
 | Command | Effect |
 |---|---|
-| `spor label <ref> <name>` | name a state for easy reference |
+| `spor label <ref> <name>` | name a state for easy reference (labels are unique); bare `spor label` lists them |
 | `spor diff <ref>` | changes from `<ref>` **to `@`** ("what's changed since then") |
 | `spor diff <a> <b>` | changes between two states |
 | `spor status` | whether a watcher is running and where `@` is |
