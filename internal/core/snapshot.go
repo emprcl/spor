@@ -41,7 +41,14 @@ func (e *Engine) Snapshot(ctx context.Context, opts SnapshotOptions) (SnapshotRe
 		return SnapshotResult{}, err
 	}
 	defer func() { _ = wl.Release() }()
+	return e.snapshotLocked(ctx, opts)
+}
 
+// snapshotLocked is Snapshot's body, assuming the caller already holds the write
+// lock. Restore force-settles (docs/SPEC.md §5) by calling this under the single
+// lock it holds for the whole operation, so the pre-restore snapshot and the
+// materialization can never interleave with another front-end.
+func (e *Engine) snapshotLocked(ctx context.Context, opts SnapshotOptions) (SnapshotResult, error) {
 	// Read HEAD up front: it is the parent of any new state, the base for no-op
 	// suppression, and (on Windows) the source of inherited exec bits. The write
 	// lock keeps it stable for the rest of the operation.
