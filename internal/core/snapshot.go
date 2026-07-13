@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"time"
 
@@ -22,10 +24,13 @@ type SnapshotOptions struct {
 }
 
 // SnapshotResult reports the outcome. When Created is false the working tree
-// matched HEAD and no state was recorded (no-op suppression).
+// matched HEAD and no state was recorded (no-op suppression). Warnings are
+// non-fatal problems, files skipped or carried over unread (docs/SPEC.md §4),
+// for the front-end to surface.
 type SnapshotResult struct {
-	Created bool
-	StateID string
+	Created  bool
+	StateID  string
+	Warnings []string
 }
 
 // Snapshot records the current working tree as a new state, per docs/SPEC.md §4.
@@ -49,17 +54,50 @@ func (e *Engine) Snapshot(ctx context.Context, opts SnapshotOptions) (SnapshotRe
 	}
 
 	// Walk → store blobs → build the manifest (in sorted path order).
-	files, err := walk.Walk(e.root)
+	files, warnings, err := walk.Walk(e.root)
 	if err != nil {
 		return SnapshotResult{}, err
 	}
+
+	// HEAD's manifest, loaded lazily: only needed to carry over the entry of a
+	// file that exists but cannot be read (docs/SPEC.md §4).
+	var headManifest map[string]manifestEntry
+	loadHeadManifest := func() error {
+		if headManifest != nil || !head.Valid {
+			return nil
+		}
+		rows, err := e.q.ListManifestEntries(ctx, head.String)
+		if err != nil {
+			return fmt.Errorf("reading HEAD manifest: %w", err)
+		}
+		headManifest = make(map[string]manifestEntry, len(rows))
+		for _, r := range rows {
+			headManifest[r.Path] = manifestEntry{path: r.Path, hash: r.BlobHash, exec: r.Executable != 0}
+		}
+		return nil
+	}
+
 	entries := make([]manifestEntry, 0, len(files))
 	for _, f := range files {
-		hash, err := e.storeFile(f.Abs)
-		if err != nil {
-			return SnapshotResult{}, fmt.Errorf("storing %s: %w", f.Rel, err)
+		hash, storeErr := e.storeFile(f.Abs)
+		switch {
+		case storeErr == nil:
+			entries = append(entries, manifestEntry{path: f.Rel, hash: hash, exec: f.Exec})
+		case errors.Is(storeErr, fs.ErrNotExist):
+			// Vanished since the walk (editor atomic saves): recorded as deleted.
+		default:
+			// Present but unreadable: inherit HEAD's entry so the file is not
+			// spuriously recorded as a deletion; new files are skipped.
+			if err := loadHeadManifest(); err != nil {
+				return SnapshotResult{}, err
+			}
+			if prev, ok := headManifest[f.Rel]; ok {
+				entries = append(entries, prev)
+				warnings = append(warnings, fmt.Sprintf("%s: unreadable, kept previous version: %v", f.Rel, storeErr))
+			} else {
+				warnings = append(warnings, fmt.Sprintf("%s: unreadable, skipped: %v", f.Rel, storeErr))
+			}
 		}
-		entries = append(entries, manifestEntry{path: f.Rel, hash: hash, exec: f.Exec})
 	}
 	// On platforms that cannot observe the execute bit, inherit it from HEAD so a
 	// snapshot there does not flip inherited bits back off (docs/SPEC.md §4).
@@ -75,7 +113,7 @@ func (e *Engine) Snapshot(ctx context.Context, opts SnapshotOptions) (SnapshotRe
 			return SnapshotResult{}, fmt.Errorf("reading HEAD manifest: %w", err)
 		}
 		if prev == manifestHash {
-			return SnapshotResult{Created: false}, nil
+			return SnapshotResult{Created: false, Warnings: warnings}, nil
 		}
 	}
 
@@ -83,7 +121,7 @@ func (e *Engine) Snapshot(ctx context.Context, opts SnapshotOptions) (SnapshotRe
 	if err := e.commitState(ctx, id, head, manifestHash, opts.Label, entries); err != nil {
 		return SnapshotResult{}, err
 	}
-	return SnapshotResult{Created: true, StateID: id}, nil
+	return SnapshotResult{Created: true, StateID: id, Warnings: warnings}, nil
 }
 
 // commitState inserts the state row, its manifest entries, and advances HEAD in a

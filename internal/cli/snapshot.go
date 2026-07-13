@@ -37,6 +37,9 @@ func newSnapshotCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			for _, w := range res.Warnings {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
+			}
 			if !res.Created {
 				fmt.Fprintln(cmd.OutOrStdout(), "nothing to snapshot")
 				return nil

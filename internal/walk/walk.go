@@ -4,6 +4,8 @@
 package walk
 
 import (
+	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,6 +24,11 @@ type File struct {
 	// false on platforms that cannot report it (Windows), where the snapshot
 	// inherits the bit from the parent state instead of observing it here.
 	Exec bool
+	// Size, MtimeNs, and Inode identify the file for the stat cache
+	// (docs/SPEC.md §4). Inode is 0 where unavailable (Windows).
+	Size    int64
+	MtimeNs int64
+	Inode   uint64
 }
 
 // StorageDir is the project-local directory spor owns; it is never tracked and
@@ -45,11 +52,15 @@ var defaultIgnorePatterns = []byte(`.git/
 4913
 `)
 
-// Walk returns the tracked files under root, sorted by Rel. It always skips
-// spor's own storage directory, applies the built-in editor-temp defaults, and
-// layers the project's .sporignore (if present) on top. Matched directories are
-// pruned wholesale.
-func Walk(root string) ([]File, error) {
+// Walk returns the tracked files under root, sorted by Rel, plus warnings for
+// paths it had to skip. It always skips spor's own storage directory, applies
+// the built-in editor-temp defaults, and layers the project's .sporignore (if
+// present) on top. Matched directories are pruned wholesale.
+//
+// Walk never aborts over a single bad path (docs/SPEC.md §4): one that vanishes
+// mid-walk (editor atomic saves) is simply gone, and an unreadable one is
+// skipped with a warning.
+func Walk(root string) (files []File, warnings []string, err error) {
 	m := gitignore.New("")
 	m.AddPatterns(defaultIgnorePatterns, "")
 	ignorePath := filepath.Join(root, IgnoreFile)
@@ -57,9 +68,26 @@ func Walk(root string) ([]File, error) {
 		m.AddFromFile(ignorePath, "")
 	}
 
-	var files []File
-	err := filepath.WalkDir(root, func(abs string, d fs.DirEntry, err error) error {
+	warn := func(abs string, cause error) {
+		rel, relErr := filepath.Rel(root, abs)
+		if relErr != nil {
+			rel = abs
+		}
+		warnings = append(warnings, fmt.Sprintf("skipping %s: %v", filepath.ToSlash(rel), cause))
+	}
+
+	err = filepath.WalkDir(root, func(abs string, d fs.DirEntry, err error) error {
 		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil // vanished between enumeration and stat
+			}
+			if errors.Is(err, fs.ErrPermission) {
+				warn(abs, err)
+				if d != nil && d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 			return err
 		}
 		if abs == root {
@@ -91,15 +119,26 @@ func Walk(root string) ([]File, error) {
 		}
 		info, err := d.Info()
 		if err != nil {
-			return err
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil // vanished between enumeration and stat
+			}
+			warn(abs, err)
+			return nil
 		}
-		// mode&0o111 is the execute bits; Windows never sets them (see File.Exec).
-		files = append(files, File{Rel: relSlash, Abs: abs, Exec: info.Mode()&0o111 != 0})
+		files = append(files, File{
+			Rel: relSlash,
+			Abs: abs,
+			// mode&0o111 is the execute bits; Windows never sets them (see File.Exec).
+			Exec:    info.Mode()&0o111 != 0,
+			Size:    info.Size(),
+			MtimeNs: info.ModTime().UnixNano(),
+			Inode:   inodeOf(info),
+		})
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Rel < files[j].Rel })
-	return files, nil
+	return files, warnings, nil
 }

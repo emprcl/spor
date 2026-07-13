@@ -22,7 +22,7 @@ func TestWalkSkipsStorageAndTempFiles(t *testing.T) {
 	writeFile(t, root, ".DS_Store", "macos")          // macOS
 	writeFile(t, root, "sub/.hidden.swp", "vim swap") // vim swap
 
-	files, err := Walk(root)
+	files, _, err := Walk(root)
 	if err != nil {
 		t.Fatalf("Walk: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestWalkRespectsSporignore(t *testing.T) {
 
 	writeFile(t, root, ".sporignore", "# generated stuff\n*.log\nbuild/\nnode_modules/\n")
 
-	files, err := Walk(root)
+	files, _, err := Walk(root)
 	if err != nil {
 		t.Fatalf("Walk: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestWalkIgnoresGitByDefault(t *testing.T) {
 	writeFile(t, root, ".git/config", "[core]")        // git internals: ignored
 	writeFile(t, root, ".git/objects/ab/cdef", "blob") // ignored, no .sporignore needed
 
-	files, err := Walk(root)
+	files, _, err := Walk(root)
 	if err != nil {
 		t.Fatalf("Walk: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestWalkNegationReincludes(t *testing.T) {
 	writeFile(t, root, "keep.tmp", "b")    // re-included by .sporignore negation
 	writeFile(t, root, ".sporignore", "!keep.tmp\n")
 
-	files, err := Walk(root)
+	files, _, err := Walk(root)
 	if err != nil {
 		t.Fatalf("Walk: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestWalkRelPathsAreSlashSeparated(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, filepath.Join("a", "b", "c.txt"), "x")
 
-	files, err := Walk(root)
+	files, _, err := Walk(root)
 	if err != nil {
 		t.Fatalf("Walk: %v", err)
 	}
@@ -118,6 +118,56 @@ func TestWalkRelPathsAreSlashSeparated(t *testing.T) {
 	}
 	if files[0].Rel != "a/b/c.txt" {
 		t.Fatalf("Rel = %q, want slash-separated %q", files[0].Rel, "a/b/c.txt")
+	}
+}
+
+func TestWalkSkipsUnreadableDirWithWarning(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission bits are not enforced for root")
+	}
+	root := t.TempDir()
+	writeFile(t, root, "ok.txt", "fine")
+	writeFile(t, root, "locked/hidden.txt", "unreachable")
+	locked := filepath.Join(root, "locked")
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+
+	files, warnings, err := Walk(root)
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	var got []string
+	for _, f := range files {
+		got = append(got, f.Rel)
+	}
+	want := []string{"ok.txt"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Walk = %v, want %v", got, want)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v, want exactly one", warnings)
+	}
+}
+
+func TestWalkReportsStatFields(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "f.txt", "12345")
+
+	files, _, err := Walk(root)
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	f := files[0]
+	if f.Size != 5 {
+		t.Fatalf("Size = %d, want 5", f.Size)
+	}
+	if f.MtimeNs == 0 {
+		t.Fatal("MtimeNs = 0, want the file's mtime")
 	}
 }
 

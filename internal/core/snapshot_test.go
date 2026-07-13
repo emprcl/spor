@@ -32,11 +32,21 @@ func write(t *testing.T, root, rel, content string) {
 
 func countBlobs(t *testing.T, root string) int {
 	t.Helper()
-	ents, err := os.ReadDir(filepath.Join(root, storageDir, "blobs"))
+	n := 0
+	err := filepath.WalkDir(filepath.Join(root, storageDir, "blobs"),
+		func(_ string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() {
+				n++
+			}
+			return nil
+		})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return len(ents)
+	return n
 }
 
 func TestSnapshotCreatesThenSuppresses(t *testing.T) {
@@ -131,5 +141,106 @@ func TestSnapshotDedupParentAndLabel(t *testing.T) {
 	}
 	if !label.Valid || label.String != "first" {
 		t.Fatalf("label = %v, want %q", label, "first")
+	}
+}
+
+// requirePermissionChecks skips tests that rely on chmod 000 being enforced,
+// which it is not for root.
+func requirePermissionChecks(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("permission bits are not enforced for root")
+	}
+}
+
+func TestSnapshotUnreadableFileInheritsHeadEntry(t *testing.T) {
+	requirePermissionChecks(t)
+	eng, root := newTestEngine(t)
+	ctx := context.Background()
+
+	write(t, root, "a.txt", "original")
+	write(t, root, "b.txt", "one")
+	first, err := eng.Snapshot(ctx, SnapshotOptions{})
+	if err != nil {
+		t.Fatalf("Snapshot #1: %v", err)
+	}
+
+	// Make a.txt unreadable and change b.txt so the next snapshot records state.
+	aPath := filepath.Join(root, "a.txt")
+	if err := os.Chmod(aPath, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(aPath, 0o644) })
+	write(t, root, "b.txt", "two")
+
+	second, err := eng.Snapshot(ctx, SnapshotOptions{})
+	if err != nil {
+		t.Fatalf("Snapshot #2: %v", err)
+	}
+	if !second.Created {
+		t.Fatal("second snapshot did not create a state")
+	}
+	if len(second.Warnings) != 1 {
+		t.Fatalf("warnings = %v, want exactly one", second.Warnings)
+	}
+
+	// a.txt must still be in the new manifest, with its original blob hash.
+	rows, err := eng.q.ListManifestEntries(ctx, second.StateID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev, err := eng.q.ListManifestEntries(ctx, first.StateID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevHash := map[string]string{}
+	for _, r := range prev {
+		prevHash[r.Path] = r.BlobHash
+	}
+	found := false
+	for _, r := range rows {
+		if r.Path == "a.txt" {
+			found = true
+			if r.BlobHash != prevHash["a.txt"] {
+				t.Fatalf("a.txt hash = %s, want inherited %s", r.BlobHash, prevHash["a.txt"])
+			}
+		}
+	}
+	if !found {
+		t.Fatal("unreadable a.txt was recorded as deleted; want inherited entry")
+	}
+}
+
+func TestSnapshotUnreadableNewFileIsSkipped(t *testing.T) {
+	requirePermissionChecks(t)
+	eng, root := newTestEngine(t)
+	ctx := context.Background()
+
+	write(t, root, "ok.txt", "fine")
+	write(t, root, "secret.txt", "nope")
+	secret := filepath.Join(root, "secret.txt")
+	if err := os.Chmod(secret, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(secret, 0o644) })
+
+	res, err := eng.Snapshot(ctx, SnapshotOptions{})
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	if !res.Created {
+		t.Fatal("snapshot did not create a state")
+	}
+	if len(res.Warnings) != 1 {
+		t.Fatalf("warnings = %v, want exactly one", res.Warnings)
+	}
+	rows, err := eng.q.ListManifestEntries(ctx, res.StateID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.Path == "secret.txt" {
+			t.Fatal("unreadable new file should be skipped, not recorded")
+		}
 	}
 }
