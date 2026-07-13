@@ -56,7 +56,7 @@ be changed by explicit history operations (§5).
 
 | Identifier | Value | Purpose |
 |---|---|---|
-| **State ID** | opaque ULID | Names a state. Deliberately **not** derived from content or parent, so prune/compact can re-parent states without cascading new IDs down the subtree (the Git-rebase problem). |
+| **State ID** | opaque ULID | Names a state. Deliberately **not** derived from content or parent, so prune/reroot/compact can re-parent states without cascading new IDs down the subtree (the Git-rebase problem). |
 | **Manifest hash** | `SHA-256` of the canonical manifest (sorted `path → blob_hash → exec`) | Detects whether project *contents* changed (drives no-op suppression). |
 | **Blob hash** | `SHA-256(content)` | Content-addresses file contents. This is where **deduplication** lives. |
 
@@ -89,12 +89,12 @@ multiple roots exist). Multi-parent merges are out of scope. A single persisted
 
 - new states descend from `HEAD`, and creating one advances it (same
   transaction);
-- restore, prune, and compact move `HEAD` as described in §5.
+- restore, prune, reroot, and compact move `HEAD` as described in §5.
 
 `HEAD` is what makes "edit a restored state → new timeline" work: after a
 restore, the next state descends from the restored state, not the previous tip.
 
-Every `HEAD` move (snapshot, restore, undo, redo, prune, compact) is also
+Every `HEAD` move (snapshot, restore, undo, redo, prune, reroot, compact) is also
 appended to a small **HEAD journal** (`head_history`: state id + timestamp).
 The journal is what gives `redo` its meaning ("return to the state I just
 left"). It is purely additive metadata: the tree never depends on it, and it
@@ -162,7 +162,7 @@ meaning nothing is re-stored.
 > **Tradeoff:** blobs are whole-file, so a one-pixel PNG edit re-stores the
 > whole file. Accepted for v1. Content-defined chunking is the clean upgrade
 > path for media dedup and doesn't disturb the rest of the model. Whole blobs
-> (vs delta chains) are also what keep prune/compact/GC simple: a state's data
+> (vs delta chains) are also what keep prune/reroot/compact/GC simple: a state's data
 > is never entangled with a neighbor's.
 
 ---
@@ -303,9 +303,9 @@ atomic-save burst or a project-wide save-all.
 
 ## 5. Operations
 
-All operations produce or remove whole states. History editing (prune, compact)
-is **destructive but never rewriting**: it removes states from the tree but
-never alters what a surviving state contains. Both rely on opaque State IDs (no
+All operations produce or remove whole states. History editing (prune, reroot,
+compact) is **destructive but never rewriting**: it removes states from the tree
+but never alters what a surviving state contains. Both rely on opaque State IDs (no
 ID cascade on re-parent) and on GC (§8) to reclaim now-unreferenced blobs.
 
 ### Restore
@@ -361,6 +361,26 @@ Each path in the delta resolves three-way, with *base* = its version in
    require explicit confirmation.
 2. Delete the subtree's rows in one transaction.
 3. GC sweep reclaims newly-unreferenced blobs.
+
+### Reroot: make a state the new root, dropping the rest
+
+The dual of prune: where prune deletes a state's subtree, reroot keeps **only**
+that subtree. Given target `S`, the survivors are `S` and its descendants;
+everything else, `S`'s ancestors and any side branches hanging off them, is
+dropped, and `S` becomes a root. This is how a long project forgets old history
+and reclaims its space while keeping everything from a chosen point forward.
+
+1. Force-settle first, so an in-flight edit isn't lost.
+2. If `HEAD` is not among the survivors (you were on a branch being dropped),
+   relocate it to `S` and re-materialize; otherwise leave it in place.
+3. Set `parent(S) = NULL`, making `S` a root.
+4. Delete every non-survivor state in one transaction, children before parents so
+   the `parent_id` foreign key is never violated.
+5. GC sweep reclaims newly-unreferenced blobs.
+
+Like prune it is destructive but never rewriting: no surviving state's contents
+change, only `S`'s parent link. Rerooting at an existing root is a no-op.
+`reroot` should feel heavy: confirm and report exactly what will be destroyed.
 
 ### Compact: squash a linear range into one state
 
@@ -467,6 +487,7 @@ working tree.
 | Command | Effect |
 |---|---|
 | `spor prune <ref>` | delete a state **and all its descendants**; HEAD moves to its parent |
+| `spor reroot <ref>` | make a state the new root, dropping everything **not** under it (the dual of prune) |
 | `spor compact <a> <b>` | squash the linear range `a`…`b` into one state |
 
 `prune` and `undo` look identical when `@` is a leaf but are not the same:
@@ -545,8 +566,8 @@ corrupted; only the single state being created during a crash may be lost.
 ### Process model: core engine + front-ends
 
 There is **no daemon.** All behavior lives in a UI-agnostic **core engine** (a
-Go package) owning the operations (snapshot, restore, apply, prune, compact,
-gc, diff, log, label, verify), ref resolution, and locking. Three unprivileged
+Go package) owning the operations (snapshot, restore, apply, prune, reroot,
+compact, gc, diff, log, label, verify), ref resolution, and locking. Three unprivileged
 front-ends call it:
 
 - **One-shot CLI** (`spor snapshot`, `spor restore`, …): open store, call one
