@@ -32,6 +32,21 @@ func (q *Queries) AddManifestEntry(ctx context.Context, arg AddManifestEntryPara
 	return err
 }
 
+const appendHeadHistory = `-- name: AppendHeadHistory :exec
+INSERT INTO head_history (state_id, moved_at)
+VALUES (?, ?)
+`
+
+type AppendHeadHistoryParams struct {
+	StateID string
+	MovedAt int64
+}
+
+func (q *Queries) AppendHeadHistory(ctx context.Context, arg AppendHeadHistoryParams) error {
+	_, err := q.db.ExecContext(ctx, appendHeadHistory, arg.StateID, arg.MovedAt)
+	return err
+}
+
 const createState = `-- name: CreateState :exec
 INSERT INTO states (id, created_at, parent_id, manifest_hash, label)
 VALUES (?, ?, ?, ?, ?)
@@ -53,6 +68,15 @@ func (q *Queries) CreateState(ctx context.Context, arg CreateStateParams) error 
 		arg.ManifestHash,
 		arg.Label,
 	)
+	return err
+}
+
+const deleteStatCacheEntry = `-- name: DeleteStatCacheEntry :exec
+DELETE FROM stat_cache WHERE path = ?
+`
+
+func (q *Queries) DeleteStatCacheEntry(ctx context.Context, path string) error {
+	_, err := q.db.ExecContext(ctx, deleteStatCacheEntry, path)
 	return err
 }
 
@@ -114,11 +138,78 @@ func (q *Queries) ListManifestEntries(ctx context.Context, stateID string) ([]Li
 	return items, nil
 }
 
+const listStatCache = `-- name: ListStatCache :many
+SELECT path, size, mtime_ns, inode, blob_hash, recorded_at
+FROM stat_cache
+`
+
+func (q *Queries) ListStatCache(ctx context.Context) ([]StatCache, error) {
+	rows, err := q.db.QueryContext(ctx, listStatCache)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatCache{}
+	for rows.Next() {
+		var i StatCache
+		if err := rows.Scan(
+			&i.Path,
+			&i.Size,
+			&i.MtimeNs,
+			&i.Inode,
+			&i.BlobHash,
+			&i.RecordedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setHead = `-- name: SetHead :exec
 UPDATE head SET state_id = ? WHERE id = 0
 `
 
 func (q *Queries) SetHead(ctx context.Context, stateID sql.NullString) error {
 	_, err := q.db.ExecContext(ctx, setHead, stateID)
+	return err
+}
+
+const upsertStatCacheEntry = `-- name: UpsertStatCacheEntry :exec
+INSERT INTO stat_cache (path, size, mtime_ns, inode, blob_hash, recorded_at)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (path) DO UPDATE SET
+    size        = excluded.size,
+    mtime_ns    = excluded.mtime_ns,
+    inode       = excluded.inode,
+    blob_hash   = excluded.blob_hash,
+    recorded_at = excluded.recorded_at
+`
+
+type UpsertStatCacheEntryParams struct {
+	Path       string
+	Size       int64
+	MtimeNs    int64
+	Inode      int64
+	BlobHash   string
+	RecordedAt int64
+}
+
+func (q *Queries) UpsertStatCacheEntry(ctx context.Context, arg UpsertStatCacheEntryParams) error {
+	_, err := q.db.ExecContext(ctx, upsertStatCacheEntry,
+		arg.Path,
+		arg.Size,
+		arg.MtimeNs,
+		arg.Inode,
+		arg.BlobHash,
+		arg.RecordedAt,
+	)
 	return err
 }

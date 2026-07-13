@@ -13,11 +13,26 @@ type Head struct {
 	StateID sql.NullString
 }
 
+type HeadHistory struct {
+	Seq     int64
+	StateID string
+	MovedAt int64
+}
+
 type ManifestEntry struct {
 	StateID    string
 	Path       string
 	BlobHash   string
 	Executable int64
+}
+
+type StatCache struct {
+	Path       string
+	Size       int64
+	MtimeNs    int64
+	Inode      int64
+	BlobHash   string
+	RecordedAt int64
 }
 
 type State struct {

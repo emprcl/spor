@@ -36,7 +36,33 @@ CREATE TABLE head (
 
 INSERT INTO head (id, state_id) VALUES (0, NULL);
 
+-- Append-only journal of HEAD moves (snapshot, restore, undo, redo, prune,
+-- compact). Powers redo ("return to the state I just left"); purely additive
+-- metadata the tree never depends on. Local, never synced. See docs/SPEC.md §2.
+CREATE TABLE head_history (
+    seq      INTEGER PRIMARY KEY AUTOINCREMENT,
+    state_id TEXT    NOT NULL REFERENCES states(id) ON DELETE CASCADE,
+    moved_at INTEGER NOT NULL                       -- unix milliseconds
+);
+
+CREATE INDEX idx_head_history_state ON head_history(state_id);
+
+-- Advisory stat cache: lets a snapshot reuse the last recorded blob hash for a
+-- file whose (size, mtime_ns, inode) are unchanged instead of re-reading it.
+-- recorded_at (unix nanoseconds) drives the racily-clean rule: rows whose file
+-- mtime is not older than recorded_at are never trusted. See docs/SPEC.md §4.
+CREATE TABLE stat_cache (
+    path        TEXT    PRIMARY KEY,
+    size        INTEGER NOT NULL,
+    mtime_ns    INTEGER NOT NULL,
+    inode       INTEGER NOT NULL,                   -- 0 where unavailable (Windows)
+    blob_hash   TEXT    NOT NULL,
+    recorded_at INTEGER NOT NULL                    -- unix nanoseconds
+);
+
 -- +goose Down
+DROP TABLE stat_cache;
+DROP TABLE head_history;
 DROP TABLE head;
 DROP TABLE manifest_entries;
 DROP TABLE states;
