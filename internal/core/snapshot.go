@@ -77,17 +77,52 @@ func (e *Engine) Snapshot(ctx context.Context, opts SnapshotOptions) (SnapshotRe
 		return nil
 	}
 
+	// The stat cache (docs/SPEC.md §4) elides re-reading unchanged files. A row
+	// is trusted only when size, mtime, and inode all match, the mtime is
+	// strictly older than the row's recording time (the racily-clean rule), and
+	// the blob it names is actually on disk. snapStart is taken before any file
+	// is read, so content mutating mid-snapshot always lands at or after it and
+	// the affected row is distrusted next time.
+	cacheRows, err := e.q.ListStatCache(ctx)
+	if err != nil {
+		return SnapshotResult{}, fmt.Errorf("reading stat cache: %w", err)
+	}
+	cache := make(map[string]gen.StatCache, len(cacheRows))
+	for _, r := range cacheRows {
+		cache[r.Path] = r
+	}
+	snapStart := time.Now().UnixNano()
+	var upserts []gen.UpsertStatCacheEntryParams
+	walked := make(map[string]bool, len(files))
+
 	entries := make([]manifestEntry, 0, len(files))
 	for _, f := range files {
+		walked[f.Rel] = true
+		if row, ok := cache[f.Rel]; ok &&
+			row.Size == f.Size && row.MtimeNs == f.MtimeNs && row.Inode == int64(f.Inode) &&
+			f.MtimeNs < row.RecordedAt &&
+			e.blobs.Has(row.BlobHash) {
+			entries = append(entries, manifestEntry{path: f.Rel, hash: row.BlobHash, exec: f.Exec})
+			continue
+		}
 		hash, storeErr := e.storeFile(f.Abs)
 		switch {
 		case storeErr == nil:
 			entries = append(entries, manifestEntry{path: f.Rel, hash: hash, exec: f.Exec})
+			upserts = append(upserts, gen.UpsertStatCacheEntryParams{
+				Path:       f.Rel,
+				Size:       f.Size,
+				MtimeNs:    f.MtimeNs,
+				Inode:      int64(f.Inode),
+				BlobHash:   hash,
+				RecordedAt: snapStart,
+			})
 		case errors.Is(storeErr, fs.ErrNotExist):
 			// Vanished since the walk (editor atomic saves): recorded as deleted.
 		default:
 			// Present but unreadable: inherit HEAD's entry so the file is not
-			// spuriously recorded as a deletion; new files are skipped.
+			// spuriously recorded as a deletion; new files are skipped. No cache
+			// row is written, since nothing was read.
 			if err := loadHeadManifest(); err != nil {
 				return SnapshotResult{}, err
 			}
@@ -97,6 +132,12 @@ func (e *Engine) Snapshot(ctx context.Context, opts SnapshotOptions) (SnapshotRe
 			} else {
 				warnings = append(warnings, fmt.Sprintf("%s: unreadable, skipped: %v", f.Rel, storeErr))
 			}
+		}
+	}
+	var cacheDeletes []string
+	for p := range cache {
+		if !walked[p] {
+			cacheDeletes = append(cacheDeletes, p)
 		}
 	}
 	// On platforms that cannot observe the execute bit, inherit it from HEAD so a
@@ -113,25 +154,77 @@ func (e *Engine) Snapshot(ctx context.Context, opts SnapshotOptions) (SnapshotRe
 			return SnapshotResult{}, fmt.Errorf("reading HEAD manifest: %w", err)
 		}
 		if prev == manifestHash {
+			// Still refresh the cache: a suppressed snapshot may have warmed it
+			// (e.g. the first run over an existing store), and skipping the write
+			// would make every future no-op re-read the whole project.
+			if err := e.updateStatCache(ctx, upserts, cacheDeletes); err != nil {
+				return SnapshotResult{}, err
+			}
 			return SnapshotResult{Created: false, Warnings: warnings}, nil
 		}
 	}
 
 	id := ulid.Make().String()
-	if err := e.commitState(ctx, id, head, manifestHash, opts.Label, entries); err != nil {
+	if err := e.commitState(ctx, id, head, manifestHash, opts.Label, entries, upserts, cacheDeletes); err != nil {
 		return SnapshotResult{}, err
 	}
 	return SnapshotResult{Created: true, StateID: id, Warnings: warnings}, nil
 }
 
-// commitState inserts the state row, its manifest entries, and advances HEAD in a
-// single transaction. All referenced blobs are already written and verified.
+// applyStatCache writes the pending stat-cache changes through q (which may be
+// transaction-scoped). Rows are only written for files that were actually read
+// during this snapshot; untouched rows stay as they are.
+func applyStatCache(
+	ctx context.Context,
+	q *gen.Queries,
+	upserts []gen.UpsertStatCacheEntryParams,
+	deletes []string,
+) error {
+	for _, u := range upserts {
+		if err := q.UpsertStatCacheEntry(ctx, u); err != nil {
+			return fmt.Errorf("updating stat cache for %s: %w", u.Path, err)
+		}
+	}
+	for _, p := range deletes {
+		if err := q.DeleteStatCacheEntry(ctx, p); err != nil {
+			return fmt.Errorf("clearing stat cache for %s: %w", p, err)
+		}
+	}
+	return nil
+}
+
+// updateStatCache applies stat-cache changes outside a state creation (the
+// no-op suppression path), in a transaction of its own.
+func (e *Engine) updateStatCache(
+	ctx context.Context,
+	upserts []gen.UpsertStatCacheEntryParams,
+	deletes []string,
+) error {
+	if len(upserts) == 0 && len(deletes) == 0 {
+		return nil
+	}
+	tx, err := e.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after a successful Commit
+	if err := applyStatCache(ctx, e.q.WithTx(tx), upserts, deletes); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// commitState inserts the state row, its manifest entries, and the stat-cache
+// changes, and advances HEAD, in a single transaction. All referenced blobs are
+// already written and verified.
 func (e *Engine) commitState(
 	ctx context.Context,
 	id string,
 	parent sql.NullString,
 	manifestHash, label string,
 	entries []manifestEntry,
+	cacheUpserts []gen.UpsertStatCacheEntryParams,
+	cacheDeletes []string,
 ) error {
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -158,6 +251,9 @@ func (e *Engine) commitState(
 		}); err != nil {
 			return fmt.Errorf("adding manifest entry %s: %w", ent.path, err)
 		}
+	}
+	if err := applyStatCache(ctx, q, cacheUpserts, cacheDeletes); err != nil {
+		return err
 	}
 	if err := q.SetHead(ctx, sql.NullString{String: id, Valid: true}); err != nil {
 		return fmt.Errorf("advancing HEAD: %w", err)

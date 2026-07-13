@@ -166,11 +166,17 @@ func TestSnapshotUnreadableFileInheritsHeadEntry(t *testing.T) {
 	}
 
 	// Make a.txt unreadable and change b.txt so the next snapshot records state.
+	// chmod alone leaves size/mtime/inode intact, so the stat cache would serve
+	// a.txt's hash without reading it; drop its row to force the read path this
+	// test is about.
 	aPath := filepath.Join(root, "a.txt")
 	if err := os.Chmod(aPath, 0o000); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(aPath, 0o644) })
+	if _, err := eng.db.ExecContext(ctx, `DELETE FROM stat_cache WHERE path = 'a.txt'`); err != nil {
+		t.Fatal(err)
+	}
 	write(t, root, "b.txt", "two")
 
 	second, err := eng.Snapshot(ctx, SnapshotOptions{})
