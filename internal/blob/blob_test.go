@@ -48,6 +48,11 @@ func TestPutRoundTripAndPlaintextHash(t *testing.T) {
 	if !bytes.Equal(got, data) {
 		t.Fatalf("round-trip mismatch: got %q want %q", got, data)
 	}
+
+	// Fan-out layout: the object lives under blobs/<first 2 hex chars>/<rest>.
+	if _, err := os.Stat(filepath.Join(s.dir, hash[:2], hash[2:])); err != nil {
+		t.Fatalf("blob not at fan-out path: %v", err)
+	}
 }
 
 func TestPutDedup(t *testing.T) {
@@ -67,15 +72,88 @@ func TestPutDedup(t *testing.T) {
 	}
 
 	// Only one object on disk.
-	ents, err := os.ReadDir(s.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(ents) != 1 {
-		t.Fatalf("expected 1 blob after dedup, got %d", len(ents))
+	if n := countObjects(t, s); n != 1 {
+		t.Fatalf("expected 1 blob after dedup, got %d", n)
 	}
 	if !s.Has(h1) {
 		t.Fatalf("Has(%s) = false, want true", h1)
+	}
+}
+
+// countObjects counts blob files across the fan-out directories.
+func countObjects(t *testing.T, s *Store) int {
+	t.Helper()
+	n := 0
+	err := filepath.WalkDir(s.dir, func(_ string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			n++
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func TestPutFileDedupSkipsWrites(t *testing.T) {
+	s := newStore(t)
+	data := []byte("file content")
+	path := filepath.Join(t.TempDir(), "f.txt")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	open := func() *os.File {
+		t.Helper()
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+
+	f1 := open()
+	h1, err := s.PutFile(f1)
+	f1.Close()
+	if err != nil {
+		t.Fatalf("PutFile #1: %v", err)
+	}
+	sum := sha256.Sum256(data)
+	if h1 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("hash = %s, want plaintext sha256", h1)
+	}
+
+	// Second PutFile of identical content must dedup, write no temp files, and
+	// not disturb the stored object.
+	before, err := os.Stat(s.path(h1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f2 := open()
+	h2, err := s.PutFile(f2)
+	f2.Close()
+	if err != nil {
+		t.Fatalf("PutFile #2: %v", err)
+	}
+	if h2 != h1 {
+		t.Fatalf("hashes differ: %s != %s", h1, h2)
+	}
+	after, err := os.Stat(s.path(h1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) || after.Size() != before.Size() {
+		t.Fatal("stored object was rewritten on a dedup hit")
+	}
+	if ents, err := os.ReadDir(s.tmp); err != nil || len(ents) != 0 {
+		t.Fatalf("temp dir not empty after dedup hit (err=%v, entries=%d)", err, len(ents))
+	}
+	if n := countObjects(t, s); n != 1 {
+		t.Fatalf("expected 1 blob, got %d", n)
 	}
 }
 

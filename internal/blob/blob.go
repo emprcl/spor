@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -36,9 +37,11 @@ func New(dir, tmp string) (*Store, error) {
 	return &Store{dir: dir, tmp: tmp}, nil
 }
 
-// path returns the on-disk object path for a blob hash.
+// path returns the on-disk object path for a blob hash, fanned out git-style
+// under a directory named by the hash's first two hex chars (docs/SPEC.md §3),
+// so no single directory accumulates an unbounded number of entries.
 func (s *Store) path(hash string) string {
-	return filepath.Join(s.dir, hash)
+	return filepath.Join(s.dir, hash[:2], hash[2:])
 }
 
 // Has reports whether a blob with the given hash already exists.
@@ -97,10 +100,52 @@ func (s *Store) Put(r io.Reader) (hash string, err error) {
 		return hash, nil
 	}
 
-	if err = os.Rename(tmpName, s.path(hash)); err != nil {
+	target := s.path(hash)
+	fanDir := filepath.Dir(target)
+	fanDirCreated := false
+	switch mkErr := os.Mkdir(fanDir, 0o755); {
+	case mkErr == nil:
+		fanDirCreated = true
+	case !errors.Is(mkErr, fs.ErrExist):
+		return "", fmt.Errorf("creating blob directory %s: %w", fanDir, mkErr)
+	}
+	if err = os.Rename(tmpName, target); err != nil {
 		return "", fmt.Errorf("installing blob %s: %w", hash, err)
 	}
+	// Persist the rename itself: fsync the fan-out directory, and the store root
+	// too when the fan-out directory is new, before the caller commits a state
+	// that references this blob (docs/SPEC.md §8). No-op on Windows.
+	if err = syncDir(fanDir); err != nil {
+		return "", fmt.Errorf("syncing blob directory %s: %w", fanDir, err)
+	}
+	if fanDirCreated {
+		if err = syncDir(s.dir); err != nil {
+			return "", fmt.Errorf("syncing blob store root: %w", err)
+		}
+	}
 	return hash, nil
+}
+
+// PutFile stores an on-disk file, skipping all writes when its content is
+// already stored: a first pass streams the plaintext through SHA-256 only, and
+// the compress-and-install path (Put) runs solely on a miss. Unchanged files,
+// the overwhelming majority of every snapshot, therefore cost one read and zero
+// writes. The install happens under the hash Put recomputes on its own pass, so
+// a file mutating between the two passes still stores whatever was read, never
+// a wrong hash; the next snapshot reconciles (walk is the source of truth).
+func (s *Store) PutFile(f *os.File) (string, error) {
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	hash := hex.EncodeToString(h.Sum(nil))
+	if s.Has(hash) {
+		return hash, nil
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	return s.Put(f)
 }
 
 // Open returns a reader over the decompressed contents of a blob.

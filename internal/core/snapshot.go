@@ -128,13 +128,14 @@ func (e *Engine) commitState(
 }
 
 // storeFile streams a file into the blob store and returns its content hash.
+// PutFile writes nothing for content the store already holds.
 func (e *Engine) storeFile(abs string) (string, error) {
 	f, err := os.Open(abs)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	return e.blobs.Put(f)
+	return e.blobs.PutFile(f)
 }
 
 // manifestEntry is one path→(blob-hash, exec-bit) row, held in sorted path order.
