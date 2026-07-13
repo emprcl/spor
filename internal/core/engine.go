@@ -75,6 +75,25 @@ func OpenOrInit(ctx context.Context, start string) (*Engine, error) {
 	return openAt(ctx, root)
 }
 
+// ErrNotProject is returned when no store is found at or above the starting
+// directory and the operation is not allowed to create one.
+var ErrNotProject = fmt.Errorf("not a spor project (no %s found); run 'spor snapshot' to start one", storageDir)
+
+// OpenExisting opens the store for the tree containing start, discovering the
+// project root by walking up. Unlike OpenOrInit it never creates a store: if none
+// is found it returns ErrNotProject. This is the entry point for read commands
+// such as log. See docs/SPEC.md §8.
+func OpenExisting(ctx context.Context, start string) (*Engine, error) {
+	root, found, err := Discover(start)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, ErrNotProject
+	}
+	return openAt(ctx, root)
+}
+
 // guardImplicitInit refuses to implicitly create a store in a directory that is
 // almost certainly not a project root: the filesystem root or the user's home
 // directory. This stops a stray command in the wrong place from snapshotting an

@@ -20,6 +20,7 @@ func Root() *cobra.Command {
 	}
 
 	root.AddCommand(newSnapshotCmd())
+	root.AddCommand(newLogCmd())
 
 	return root
 }
