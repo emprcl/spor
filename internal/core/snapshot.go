@@ -57,6 +57,16 @@ func (e *Engine) snapshotLocked(ctx context.Context, opts SnapshotOptions) (Snap
 		return SnapshotResult{}, fmt.Errorf("reading HEAD: %w", err)
 	}
 
+	// Labels are unique aliases (docs/SPEC.md §2), so reject a taken one up front,
+	// before doing the walk, rather than failing on the insert.
+	if opts.Label != "" {
+		if owner, err := e.labelOwner(ctx, opts.Label); err != nil {
+			return SnapshotResult{}, err
+		} else if owner != "" {
+			return SnapshotResult{}, fmt.Errorf("label %q is already used by state %s", opts.Label, owner)
+		}
+	}
+
 	// Walk → store blobs → build the manifest (in sorted path order).
 	files, err := walk.Walk(e.root)
 	if err != nil {

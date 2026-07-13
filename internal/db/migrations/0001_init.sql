@@ -14,6 +14,12 @@ CREATE TABLE states (
 
 CREATE INDEX idx_states_parent ON states(parent_id);
 
+-- A label is a unique alias for a state, like its id (docs/SPEC.md §2, §6).
+-- Unlabeled states store NULL, and SQLite treats NULLs as distinct under a
+-- UNIQUE index, so any number of states may be unlabeled while every non-null
+-- label names exactly one state.
+CREATE UNIQUE INDEX idx_states_label ON states(label);
+
 -- The manifest of a state, stored as rows (path -> blob hash) so GC, verify, and
 -- dedup can query referenced blobs directly in SQL. Blob contents live on disk.
 -- executable is the one preserved permission bit (0 or 1); see docs/SPEC.md §2.

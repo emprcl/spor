@@ -22,6 +22,7 @@ func Root() *cobra.Command {
 	root.AddCommand(newSnapshotCmd())
 	root.AddCommand(newLogCmd())
 	root.AddCommand(newRestoreCmd())
+	root.AddCommand(newLabelCmd())
 
 	return root
 }

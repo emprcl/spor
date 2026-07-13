@@ -46,6 +46,6 @@ func newSnapshotCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&label, "label", "m", "", "name for this state")
+	cmd.Flags().StringVarP(&label, "label", "l", "", "name for this state")
 	return cmd
 }

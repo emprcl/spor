@@ -22,7 +22,7 @@ func newRestoreCmd() *cobra.Command {
 			"undoable.\n\n" +
 			"A <ref> selects the state to restore:\n" +
 			"  @~n          n states back from the current one\n" +
-			"  <label>      a state named with 'snapshot -m'\n" +
+			"  <label>      a state named with 'snapshot -l' or 'label'\n" +
 			"  <time>       how long ago, e.g. \"2h ago\" or \"3d\"\n" +
 			"               (units: s, m, h, d; the word \"ago\" is optional)\n" +
 			"  <id>         a state id, or just its first few characters",
