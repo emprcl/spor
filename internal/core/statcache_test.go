@@ -23,7 +23,8 @@ func listCache(t *testing.T, eng *Engine) map[string]gen.StatCache {
 }
 
 // A trusted cache row must let a snapshot reuse the blob hash without opening
-// the file: an unreadable-but-unchanged file goes through cleanly, no warning.
+// the file. The observable: an unreadable file aborts a snapshot, so an
+// unreadable-but-unchanged file succeeding proves it was never opened.
 func TestStatCacheHitAvoidsReading(t *testing.T) {
 	requirePermissionChecks(t)
 	eng, root := newTestEngine(t)
@@ -45,13 +46,10 @@ func TestStatCacheHitAvoidsReading(t *testing.T) {
 
 	second, err := eng.Snapshot(ctx, SnapshotOptions{})
 	if err != nil {
-		t.Fatalf("Snapshot #2: %v", err)
+		t.Fatalf("Snapshot #2 read the unreadable a.txt instead of hitting the cache: %v", err)
 	}
 	if !second.Created {
 		t.Fatal("second snapshot did not create a state")
-	}
-	if len(second.Warnings) != 0 {
-		t.Fatalf("warnings = %v, want none (cache hit should not read a.txt)", second.Warnings)
 	}
 
 	// a.txt kept its blob hash, served from the cache.
@@ -92,7 +90,7 @@ func TestStatCacheRacilyCleanRowIsNotTrusted(t *testing.T) {
 
 	// Age the row into raciness (recorded_at <= mtime_ns), then make the file
 	// unreadable: if the snapshot correctly distrusts the row it must try to
-	// read a.txt and hit the unreadable-file warning path.
+	// read a.txt and fail on it.
 	if _, err := eng.db.ExecContext(ctx,
 		`UPDATE stat_cache SET recorded_at = mtime_ns WHERE path = 'a.txt'`); err != nil {
 		t.Fatal(err)
@@ -104,12 +102,8 @@ func TestStatCacheRacilyCleanRowIsNotTrusted(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(aPath, 0o644) })
 	write(t, root, "b.txt", "two")
 
-	res, err := eng.Snapshot(ctx, SnapshotOptions{})
-	if err != nil {
-		t.Fatalf("Snapshot #2: %v", err)
-	}
-	if len(res.Warnings) != 1 {
-		t.Fatalf("warnings = %v, want exactly one (racily-clean row must force a read)", res.Warnings)
+	if _, err := eng.Snapshot(ctx, SnapshotOptions{}); err == nil {
+		t.Fatal("Snapshot trusted a racily-clean row; want a read attempt (which fails here)")
 	}
 }
 

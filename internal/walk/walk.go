@@ -5,7 +5,6 @@ package walk
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -52,15 +51,16 @@ var defaultIgnorePatterns = []byte(`.git/
 4913
 `)
 
-// Walk returns the tracked files under root, sorted by Rel, plus warnings for
-// paths it had to skip. It always skips spor's own storage directory, applies
-// the built-in editor-temp defaults, and layers the project's .sporignore (if
-// present) on top. Matched directories are pruned wholesale.
+// Walk returns the tracked files under root, sorted by Rel. It always skips
+// spor's own storage directory, applies the built-in editor-temp defaults, and
+// layers the project's .sporignore (if present) on top. Matched directories are
+// pruned wholesale.
 //
-// Walk never aborts over a single bad path (docs/SPEC.md §4): one that vanishes
-// mid-walk (editor atomic saves) is simply gone, and an unreadable one is
-// skipped with a warning.
-func Walk(root string) (files []File, warnings []string, err error) {
+// A path that vanishes mid-walk (editor atomic saves do this constantly) is
+// treated as if it never existed; that race is routine under a watcher and
+// never an error. Anything else (permissions, I/O) aborts: fix the file or
+// ignore it via .sporignore. See docs/SPEC.md §4.
+func Walk(root string) ([]File, error) {
 	m := gitignore.New("")
 	m.AddPatterns(defaultIgnorePatterns, "")
 	ignorePath := filepath.Join(root, IgnoreFile)
@@ -68,25 +68,11 @@ func Walk(root string) (files []File, warnings []string, err error) {
 		m.AddFromFile(ignorePath, "")
 	}
 
-	warn := func(abs string, cause error) {
-		rel, relErr := filepath.Rel(root, abs)
-		if relErr != nil {
-			rel = abs
-		}
-		warnings = append(warnings, fmt.Sprintf("skipping %s: %v", filepath.ToSlash(rel), cause))
-	}
-
-	err = filepath.WalkDir(root, func(abs string, d fs.DirEntry, err error) error {
+	var files []File
+	err := filepath.WalkDir(root, func(abs string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				return nil // vanished between enumeration and stat
-			}
-			if errors.Is(err, fs.ErrPermission) {
-				warn(abs, err)
-				if d != nil && d.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
 			}
 			return err
 		}
@@ -122,8 +108,7 @@ func Walk(root string) (files []File, warnings []string, err error) {
 			if errors.Is(err, fs.ErrNotExist) {
 				return nil // vanished between enumeration and stat
 			}
-			warn(abs, err)
-			return nil
+			return err
 		}
 		files = append(files, File{
 			Rel: relSlash,
@@ -137,8 +122,8 @@ func Walk(root string) (files []File, warnings []string, err error) {
 		return nil
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Rel < files[j].Rel })
-	return files, warnings, nil
+	return files, nil
 }
