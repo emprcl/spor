@@ -23,6 +23,8 @@ func Root() *cobra.Command {
 	root.AddCommand(newLogCmd())
 	root.AddCommand(newRestoreCmd())
 	root.AddCommand(newLabelCmd())
+	root.AddCommand(newUndoCmd())
+	root.AddCommand(newRedoCmd())
 
 	return root
 }

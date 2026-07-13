@@ -54,7 +54,14 @@ func (e *Engine) Restore(ctx context.Context, ref string) (RestoreResult, error)
 	if err != nil {
 		return RestoreResult{}, err
 	}
+	return e.restoreToLocked(ctx, target)
+}
 
+// restoreToLocked materializes an already-chosen target state into the working
+// tree and moves HEAD to it. The caller must already hold the write lock and
+// must have chosen target before this runs, since the force-settle here mutates
+// history. It is the shared tail of restore, undo, and redo (docs/SPEC.md §5).
+func (e *Engine) restoreToLocked(ctx context.Context, target string) (RestoreResult, error) {
 	// Step 1: force-settle. A one-shot restore cannot drain another process's
 	// debounce timer, so it snapshots itself.
 	settle, err := e.snapshotLocked(ctx, SnapshotOptions{})

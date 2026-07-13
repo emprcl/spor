@@ -432,7 +432,7 @@ well defined even after a restore to an old state.
 | `spor start` | run the watcher in the foreground with a **live log** of the tree building itself; Ctrl+C stops watching |
 | `spor snapshot [-l <label>]` | create one state now, then exit; the watcher-free, scriptable path |
 | `spor log` | show the timeline as a **tree** (branches visible), newest first, marking `@` |
-| `spor undo [n]` / `spor redo [n]` | step back / forward `n` states |
+| `spor undo [n]` / `spor redo [n]` | step back / forward `n` states (clamped to the history boundary) |
 | `spor restore <ref>` | jump to any state |
 
 `spor start` is, for v1, a live monitor only: it shows states appearing, the
@@ -444,6 +444,11 @@ are one-shot CLI commands.
 of `@`, as recorded by the HEAD journal (§2). Because editing after an `undo`
 starts a new branch (the old "future" is never lost), other branches are
 reached via `spor log` + `restore`, not `redo`.
+
+Both **clamp** rather than error: asking to step further than history allows lands
+on the oldest (or newest-visited) state and reports how far it moved, matching the
+undo metaphor. Both are `restore` under the hood, so each force-settles first (an
+uncommitted edit survives as a branch) and each is itself reversible.
 
 **Naming & inspecting:**
 
