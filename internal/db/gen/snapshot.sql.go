@@ -11,18 +11,24 @@ import (
 )
 
 const addManifestEntry = `-- name: AddManifestEntry :exec
-INSERT INTO manifest_entries (state_id, path, blob_hash)
-VALUES (?, ?, ?)
+INSERT INTO manifest_entries (state_id, path, blob_hash, executable)
+VALUES (?, ?, ?, ?)
 `
 
 type AddManifestEntryParams struct {
-	StateID  string
-	Path     string
-	BlobHash string
+	StateID    string
+	Path       string
+	BlobHash   string
+	Executable int64
 }
 
 func (q *Queries) AddManifestEntry(ctx context.Context, arg AddManifestEntryParams) error {
-	_, err := q.db.ExecContext(ctx, addManifestEntry, arg.StateID, arg.Path, arg.BlobHash)
+	_, err := q.db.ExecContext(ctx, addManifestEntry,
+		arg.StateID,
+		arg.Path,
+		arg.BlobHash,
+		arg.Executable,
+	)
 	return err
 }
 
@@ -70,6 +76,42 @@ func (q *Queries) GetStateManifestHash(ctx context.Context, id string) (string, 
 	var manifest_hash string
 	err := row.Scan(&manifest_hash)
 	return manifest_hash, err
+}
+
+const listManifestEntries = `-- name: ListManifestEntries :many
+SELECT path, blob_hash, executable
+FROM manifest_entries
+WHERE state_id = ?
+ORDER BY path ASC
+`
+
+type ListManifestEntriesRow struct {
+	Path       string
+	BlobHash   string
+	Executable int64
+}
+
+func (q *Queries) ListManifestEntries(ctx context.Context, stateID string) ([]ListManifestEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listManifestEntries, stateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListManifestEntriesRow{}
+	for rows.Next() {
+		var i ListManifestEntriesRow
+		if err := rows.Scan(&i.Path, &i.BlobHash, &i.Executable); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setHead = `-- name: SetHead :exec

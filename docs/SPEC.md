@@ -42,7 +42,8 @@ A state is immutable in content and contains:
 - **id**, an opaque **ULID** (see below)
 - **timestamp**, wall clock, for display only
 - **parent**, a single parent state (an editable foreign key; the root has none)
-- **manifest**, a map of every tracked file path to its blob hash
+- **manifest**, a map of every tracked file path to its blob hash plus one
+  preserved permission bit (executable)
 - **manifest hash**, stored for fast equality checks
 
 Once created, a state's manifest and blobs never change. Its parent link *may* be
@@ -53,12 +54,22 @@ changed by explicit history operations (§5).
 | Identifier | Value | Purpose |
 |---|---|---|
 | **State ID** | opaque ULID | Names a state. Deliberately **not** derived from content or parent, so prune/compact can re-parent states without cascading new IDs down the subtree (the Git-rebase problem). |
-| **Manifest hash** | `SHA-256` of the canonical manifest (sorted `path → blob_hash`) | Detects whether project *contents* changed (drives no-op suppression). |
+| **Manifest hash** | `SHA-256` of the canonical manifest (sorted `path → blob_hash → exec`) | Detects whether project *contents* changed (drives no-op suppression). |
 | **Blob hash** | `SHA-256(content)` | Content-addresses file contents. This is where **deduplication** lives. |
 
 Only *states* are opaque; *blobs* stay content-addressed. A ULID is unique and
 time-sortable (its timestamp prefix sorts chronologically). `created_at` is a
 separate column, not part of the ID.
+
+### File permissions
+
+Each manifest entry also stores one permission bit, the owner-execute bit, and it
+is part of the manifest hash, so a bare `chmod +x`, with no content change, records
+a new state. It is the only mode bit that alters behavior (scripts) and the only
+one that stays portable across machines (which sync would expose), so full Unix
+modes, ownership, ACLs, and extended attributes are deliberately out of scope. This
+mirrors Git, which records only `100644` vs `100755` for files. The blob hash stays
+content-only, so the bit never affects deduplication.
 
 ### Topology
 
@@ -171,6 +182,16 @@ Matched directories are pruned wholesale (e.g. `node_modules/`), never walked.
 `.sporignore` is itself tracked, like `.gitignore`, and spor never creates it
 (it is opt-in). Nested per-directory ignore files are out of scope for v1.
 
+### The execute bit
+
+The walk observes the execute bit from the filesystem, so `chmod +x` is captured
+like any other change (§2). On platforms that cannot report it (Windows), the bit
+is **inherited from the parent state** instead: observing would read every file as
+non-executable and, because the bit is part of the manifest hash, flip inherited
+scripts off as a spurious state. New files there default to non-executable, and
+setting the bit needs an explicit command (deferred). This is the same tradeoff as
+Git's `core.fileMode`.
+
 ### The watcher: automatic triggering
 
 While `spor start` runs, a watcher turns filesystem activity into snapshots
@@ -223,7 +244,8 @@ recording is debounced, restore **force-settles first** so an in-flight edit
 isn't lost:
 
 1. drain the pending debounce timer and run the normal walk → create-state path;
-2. materialize the target state's blobs into the working directory;
+2. materialize the target state's blobs into the working directory, applying each
+   file's stored execute bit;
 3. set `HEAD` to the restored state.
 
 Restore never modifies existing states, and the pre-restore edit survives as its

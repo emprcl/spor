@@ -14,9 +14,10 @@ type Head struct {
 }
 
 type ManifestEntry struct {
-	StateID  string
-	Path     string
-	BlobHash string
+	StateID    string
+	Path       string
+	BlobHash   string
+	Executable int64
 }
 
 type State struct {

@@ -16,10 +16,12 @@ CREATE INDEX idx_states_parent ON states(parent_id);
 
 -- The manifest of a state, stored as rows (path -> blob hash) so GC, verify, and
 -- dedup can query referenced blobs directly in SQL. Blob contents live on disk.
+-- executable is the one preserved permission bit (0 or 1); see docs/SPEC.md §2.
 CREATE TABLE manifest_entries (
-    state_id  TEXT NOT NULL REFERENCES states(id) ON DELETE CASCADE,
-    path      TEXT NOT NULL,
-    blob_hash TEXT NOT NULL,                      -- SHA-256(content)
+    state_id   TEXT    NOT NULL REFERENCES states(id) ON DELETE CASCADE,
+    path       TEXT    NOT NULL,
+    blob_hash  TEXT    NOT NULL,                  -- SHA-256(content)
+    executable INTEGER NOT NULL DEFAULT 0,        -- owner-execute bit, 0 or 1
     PRIMARY KEY (state_id, path)
 );
 

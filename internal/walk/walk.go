@@ -18,6 +18,10 @@ import (
 type File struct {
 	Rel string
 	Abs string
+	// Exec is the owner-execute bit as reported by the filesystem. It is always
+	// false on platforms that cannot report it (Windows), where the snapshot
+	// inherits the bit from the parent state instead of observing it here.
+	Exec bool
 }
 
 // StorageDir is the project-local directory spor owns; it is never tracked and
@@ -85,7 +89,12 @@ func Walk(root string) ([]File, error) {
 		if !d.Type().IsRegular() {
 			return nil
 		}
-		files = append(files, File{Rel: relSlash, Abs: abs})
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		// mode&0o111 is the execute bits; Windows never sets them (see File.Exec).
+		files = append(files, File{Rel: relSlash, Abs: abs, Exec: info.Mode()&0o111 != 0})
 		return nil
 	})
 	if err != nil {
