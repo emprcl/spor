@@ -71,6 +71,13 @@ modes, ownership, ACLs, and extended attributes are deliberately out of scope. T
 mirrors Git, which records only `100644` vs `100755` for files. The blob hash stays
 content-only, so the bit never affects deduplication.
 
+### What is tracked
+
+Only **regular files** are tracked. Symbolic links are skipped by the walk
+(support is deferred), as are sockets, devices, and other special files. Empty
+directories are not represented (a manifest is a map of file paths), and file
+mtimes are neither stored nor restored.
+
 ### Topology
 
 Every state has exactly one parent, so history is a **tree** (a forest if
@@ -84,6 +91,11 @@ multiple roots exist). Multi-parent merges are out of scope. A single persisted
 `HEAD` is what makes "edit a restored state → new timeline" work: after a restore,
 the next state descends from the restored state, not the previous tip.
 
+Every `HEAD` move (snapshot, restore, undo, redo, prune, compact) is also
+appended to a small **HEAD journal** (`head_history`: state id + timestamp).
+The journal is what gives `redo` its meaning ("return to the state I just
+left"); it is purely additive metadata, and the tree never depends on it.
+
 ---
 
 ## 3. Storage
@@ -95,10 +107,15 @@ The store lives in a `.spor/` directory at the project root:
 ```
 .spor/
   spor.db            SQLite (WAL)
-  blobs/<sha256>     zstd-compressed, content-addressed objects
+  blobs/ab/<rest>    zstd-compressed, content-addressed objects,
+                     fanned out by the hash's first two hex chars
   tmp/               staging for temp → rename
   write.lock         advisory write lock (§8)
 ```
+
+The blob fan-out (Git-style: `blobs/ab/cdef…` for hash `abcdef…`) keeps any
+single directory's entry count bounded on stores with hundreds of thousands of
+blobs.
 
 There is no `init` command: the first `snapshot` (or `spor start`) creates this
 layout implicitly. Commands find the project root by walking up from the working
@@ -106,12 +123,20 @@ directory to the nearest `.spor/`, the way Git finds `.git/`, so running from a
 subdirectory operates on the whole project instead of creating a nested store.
 Implicit creation is guarded: spor refuses to create a store directly in the
 filesystem root or the user's home directory, so a stray command cannot start
-snapshotting an enormous tree.
+snapshotting an enormous tree (`--force` overrides the guard when that is
+really what is wanted).
+
+> **Cloud-synced folders:** creative projects often live in Dropbox / Drive /
+> iCloud folders. `.spor/` should be excluded from such sync: a live SQLite
+> database inside a file syncer is a known corruption vector, and the blob
+> store churns on every snapshot. Moving the store outside the project tree
+> (e.g. `~/.local/share/spor/<project-id>`) is a possible future direction.
 
 ### Metadata: SQLite (WAL mode)
 
 Stores state rows (id, timestamp, parent, manifest hash), manifests, the `HEAD`
-pointer, and room for future metadata (tags, previews).
+pointer, the HEAD journal (§2), the stat cache (§4), and room for future
+metadata (tags, previews).
 
 ### File contents: content-addressed blobs on disk
 
@@ -146,11 +171,12 @@ re-stored.
 ### The snapshot operation
 
 Every state is created by one core operation, **snapshot**, regardless of
-trigger: **walk the whole tree**, hash every tracked file, write any new blobs,
-create a state under `HEAD`, advance `HEAD`. It rebuilds the manifest from what is
-actually on disk rather than trusting file events (which are lossy, dropped on
-buffer overflow, scrambled by atomic saves), so deletions, renames, and missed
-events fall out for free.
+trigger: **walk the whole tree**, hash every tracked file (the stat cache below
+elides re-reading unchanged ones), write any new blobs, create a state under
+`HEAD`, advance `HEAD`. It rebuilds the manifest from what is actually on disk
+rather than trusting file events (which are lossy, dropped on buffer overflow,
+scrambled by atomic saves), so deletions, renames, and missed events fall out
+for free.
 
 Two triggers call it:
 
@@ -163,6 +189,43 @@ Two triggers call it:
 `HEAD`'s, no state is created. So repeated snapshots with nothing changed, mtime
 touches, saves-in-place, and sub-second edit-then-revert fumbles all record
 nothing.
+
+### The stat cache
+
+Hashing every file makes snapshot cost proportional to project size, which the
+watcher would pay on every settle. The store therefore keeps a **stat cache**:
+for every path in the last snapshot, `(size, mtime_ns, inode) → blob hash`,
+plus the time the row was recorded. The walk still enumerates every file and
+remains the source of truth for existence, deletions, and renames; the cache
+only elides *re-reading contents*:
+
+- a file whose size, mtime, and inode all match its row reuses the recorded
+  blob hash without being opened (the blob's presence on disk is still
+  verified, one stat);
+- any mismatch, or a missing row, reads and rehashes the file and refreshes the
+  row;
+- **racily clean**: a row whose file mtime is not older than the row's own
+  recording time is never trusted; such files are always rehashed, since an
+  edit inside the filesystem's timestamp granularity could otherwise be missed.
+  This is the same defense Git's index uses;
+- on platforms without a usable inode (Windows), matching uses size + mtime
+  only.
+
+Rows are updated in the same transaction as the state they describe. The cache
+is advisory: a stale or missing row only costs a rehash, and the racily-clean
+rule closes the one case where a matching row could lie.
+
+### Unreadable and vanishing files
+
+A snapshot never aborts because of a single bad file:
+
+- a file that vanishes between enumeration and reading (editor atomic-save temp
+  files do this constantly) is treated as deleted, exactly as if the walk had
+  never seen it;
+- a file that exists but cannot be read (permissions, transient locks)
+  **inherits its manifest entry from `HEAD`**, so it is not spuriously recorded
+  as a deletion, and the snapshot reports a warning; if `HEAD` has no entry for
+  the path, it is skipped with a warning.
 
 ### Ignoring files
 
@@ -214,7 +277,9 @@ fs events ──► "dirty" signal ──► debounce timer ──► [ snapshot
   assume it was. So any event during the job sets `dirty`, checked atomically as
   the worker goes idle; if set, it re-runs. Nothing is silently missed.
 - **Max-debounce cap.** A pure quiet-timer never fires during a continuous writer
-  (a long render), so cap it to snapshot at least every M seconds.
+  (a long render), so cap it to snapshot at least every M seconds. A capped
+  snapshot may therefore capture in-progress (torn) files; accepted: the next
+  settle records the consistent version, and history keeps both.
 
 Settle window: instant-feeling (~200-500 ms) but long enough to outlast an
 atomic-save burst or a project-wide save-all.
@@ -241,21 +306,48 @@ cascade on re-parent) and on GC (§8) to reclaim now-unreferenced blobs.
 
 Materialize a state's working directory exactly and set `HEAD` to it. Because
 recording is debounced, restore **force-settles first** so an in-flight edit
-isn't lost:
+isn't lost. Force-settling cannot mean draining another process's debounce
+timer (a one-shot `spor restore` runs beside the watcher), so restore simply
+performs a snapshot itself:
 
-1. drain the pending debounce timer and run the normal walk → create-state path;
-2. materialize the target state's blobs into the working directory, applying each
-   file's stored execute bit;
-3. set `HEAD` to the restored state.
+1. under the write lock, run the normal walk → create-state path (a no-op if
+   nothing changed);
+2. materialize the target state: write every file in its manifest (applying the
+   stored execute bit), and delete every path that is in `HEAD`'s manifest but
+   not in the target's. Paths outside `HEAD`'s manifest, untracked or ignored
+   (`.git/`, `node_modules/`, build artifacts), are **never touched**;
+3. set `HEAD` to the restored state (journal appended).
 
-Restore never modifies existing states, and the pre-restore edit survives as its
-own state, so restore is itself undoable.
+The watcher's next settle then sees the restored tree and records nothing
+(no-op suppression). Restore never modifies existing states, and the
+pre-restore edit survives as its own state, so restore is itself undoable.
+
+Restore is not atomic: a crash mid-materialization leaves a mixed working tree.
+Recovery is re-running the restore; nothing was lost, since step 1 already
+recorded the pre-restore tree.
 
 ### Apply
 
-Cherry-pick the changes represented by one state onto the current working state,
-producing a new state with a **single** parent (`HEAD`). No merge commits, no
-multiple parents, the tree topology is preserved.
+Cherry-pick one state's changes onto the current state: compute the delta
+`diff(parent(ref), ref)` (a parentless `ref` counts as a delta from empty, i.e.
+pure additions) and replay it onto `HEAD`'s contents, producing a new state
+with a **single** parent (`HEAD`). No merge commits, no multiple parents, the
+tree topology is preserved.
+
+Each path in the delta resolves three-way, with *base* = its version in
+`parent(ref)`, *theirs* = in `ref`, *ours* = in `HEAD`:
+
+- *ours* == *base* (unchanged here): take *theirs*, including deletions;
+- *ours* == *theirs* (both sides agree): nothing to do;
+- both changed, both text: **diff3 merge**; a clean merge takes the merged
+  content, overlapping hunks write standard conflict markers into the file and
+  the apply is reported as conflicted. Nothing is lost: the pre-apply state
+  still exists, and resolving the markers is just editing toward the next
+  state;
+- both changed, at least one side binary: the applied state's version wins,
+  reported;
+- modify/delete (deleted on one side, modified on the other): the surviving
+  modified file is kept, reported.
 
 ### Prune: delete a state and its whole subtree
 
@@ -313,8 +405,10 @@ without quoting. A bare token is resolved in this precedence:
 3. parses as a **time**
 4. **ULID prefix**
 
-**Time rewinds `@`'s own timeline**, not the whole tree: `2h ago` finds the
-ancestor of `@` that was current ~2h ago, never some abandoned branch.
+**Time rewinds `@`'s own timeline**, not the whole tree: a time `T` resolves to
+the deepest ancestor of `@` created at or before `T`, never some abandoned
+branch. Creation times strictly increase along any ancestor chain, so this is
+well defined even after a restore to an old state.
 
 `@` is only useful as an *operand that names the current state* (`label @ …`,
 `compact @~5 @`, `prune @`, and the implicit "to now" end of a diff). `restore @`
@@ -337,9 +431,10 @@ settle indicator, and where `@` is. A full interactive TUI (navigating and
 driving restore/prune/label from within it) is deferred; until then, mutations
 are one-shot CLI commands.
 
-`redo` is intentionally simple: it follows the **most-recently-visited child**.
-Because editing after an `undo` starts a new branch (the old "future" is never
-lost), other branches are reached via `spor log` + `restore`, not `redo`.
+`redo` is intentionally simple: it follows the **most-recently-visited child**
+of `@`, as recorded by the HEAD journal (§2). Because editing after an `undo`
+starts a new branch (the old "future" is never lost), other branches are
+reached via `spor log` + `restore`, not `redo`.
 
 **Naming & inspecting:**
 
@@ -418,7 +513,8 @@ PUT/GET       /states/<ulid>      upload / download a state (metadata + manifest
 - **Pull:** the mirror image, parents-first.
 - The missing-set step is a plain ID set-difference; start naive (exchange the
   full set), optimize with a cursor later if needed.
-- `HEAD` is **local and per-machine**, never synced as authoritative.
+- `HEAD` is **local and per-machine**, never synced as authoritative; so are
+  the HEAD journal and the stat cache. Only states and blobs travel.
 
 **Sync is additive-only**, it never deletes. To make the server forget a subtree,
 prune it there explicitly (`spor remote prune <id>`); otherwise a later pull
@@ -483,10 +579,15 @@ unreliable on network filesystems, but SQLite already requires a local one.
 ### Write ordering & atomicity
 
 - **Blob:** write temp → fsync → atomic rename to its content-addressed path →
-  verify `SHA-256`.
-- **State:** only after *all* its blobs are written and verified is the state row
-  and `HEAD` advance committed to SQLite, in one transaction. An incomplete state
-  is never visible; blobs from an abandoned state are harmless orphans.
+  **fsync the containing directory**, so the rename itself survives power loss
+  (directory fsync is skipped on Windows, which cannot sync directory
+  handles) → verify `SHA-256`.
+- **State:** only after *all* its blobs are written, verified, and their
+  directories fsynced is the state row and `HEAD` advance committed to SQLite,
+  in one transaction. Otherwise a power loss could persist the SQLite commit
+  while losing a rename, leaving a state that references a missing blob. An
+  incomplete state is never visible; blobs from an abandoned state are harmless
+  orphans.
 
 ### Crash recovery
 
@@ -499,7 +600,9 @@ leftover blobs are orphans; verify basic consistency. Only then does the caller
 
 Part of v1, since prune/compact leave blobs unreferenced (and "infinite undo"
 grows without bound). GC is a **mark-sweep** over blobs reachable from all
-surviving states, run after every prune/compact and available as a command. A
+surviving states, run after every prune/compact and available as a command. GC
+takes the write lock like any other mutating operation, so it can never race an
+in-flight snapshot (whose blobs land on disk before its state row commits). A
 blob is never treated as unreferenced without a full reachability pass, and
 sweeping only ever deletes blobs, never state rows, so it can never corrupt a
 surviving state.
