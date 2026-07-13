@@ -258,6 +258,14 @@ func (e *Engine) commitState(
 	if err := q.SetHead(ctx, sql.NullString{String: id, Valid: true}); err != nil {
 		return fmt.Errorf("advancing HEAD: %w", err)
 	}
+	// Every HEAD move lands in the journal (docs/SPEC.md §2); it is what lets
+	// redo find "the state I just left".
+	if err := q.AppendHeadHistory(ctx, gen.AppendHeadHistoryParams{
+		StateID: id,
+		MovedAt: time.Now().UnixMilli(),
+	}); err != nil {
+		return fmt.Errorf("appending HEAD journal: %w", err)
+	}
 	return tx.Commit()
 }
 

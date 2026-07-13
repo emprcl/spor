@@ -144,6 +144,47 @@ func TestSnapshotDedupParentAndLabel(t *testing.T) {
 	}
 }
 
+func TestSnapshotAppendsHeadJournal(t *testing.T) {
+	eng, root := newTestEngine(t)
+	ctx := context.Background()
+
+	write(t, root, "a.txt", "one")
+	first, err := eng.Snapshot(ctx, SnapshotOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A suppressed no-op moves nothing and must not journal.
+	if _, err := eng.Snapshot(ctx, SnapshotOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	write(t, root, "a.txt", "two")
+	second, err := eng.Snapshot(ctx, SnapshotOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := eng.db.QueryContext(ctx, `SELECT state_id FROM head_history ORDER BY seq ASC`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var visited []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		visited = append(visited, id)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{first.StateID, second.StateID}
+	if len(visited) != 2 || visited[0] != want[0] || visited[1] != want[1] {
+		t.Fatalf("head_history = %v, want %v", visited, want)
+	}
+}
+
 // requirePermissionChecks skips tests that rely on chmod 000 being enforced,
 // which it is not for root.
 func requirePermissionChecks(t *testing.T) {
