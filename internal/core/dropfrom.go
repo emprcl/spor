@@ -7,33 +7,33 @@ import (
 	"github.com/emprcl/spor/internal/lock"
 )
 
-// PrunePlan previews what a prune would destroy, for the confirmation prompt.
-type PrunePlan struct {
+// DropfromPlan previews what a dropfrom would destroy, for the confirmation prompt.
+type DropfromPlan struct {
 	Target           string
 	StatesToDelete   int
 	HeadWillMove     bool
 	HeadTarget       string // parent id HEAD moves to; "" when it does not move
-	WipesEntireStore bool   // the prune removes every state
+	WipesEntireStore bool   // the dropfrom removes every state
 }
 
-// PrunePlan resolves ref and reports what pruning it would remove, without
+// DropfromPlan resolves ref and reports what pruning it would remove, without
 // changing anything.
-func (e *Engine) PrunePlan(ctx context.Context, ref string) (PrunePlan, error) {
+func (e *Engine) DropfromPlan(ctx context.Context, ref string) (DropfromPlan, error) {
 	target, err := e.Resolve(ctx, ref)
 	if err != nil {
-		return PrunePlan{}, err
+		return DropfromPlan{}, err
 	}
 	g, err := e.loadGraph(ctx)
 	if err != nil {
-		return PrunePlan{}, err
+		return DropfromPlan{}, err
 	}
 	sub := g.subtree(target)
 	head, err := e.q.GetHead(ctx)
 	if err != nil {
-		return PrunePlan{}, fmt.Errorf("reading HEAD: %w", err)
+		return DropfromPlan{}, fmt.Errorf("reading HEAD: %w", err)
 	}
 
-	plan := PrunePlan{
+	plan := DropfromPlan{
 		Target:           target,
 		StatesToDelete:   len(sub),
 		WipesEntireStore: len(sub) == len(g.states),
@@ -49,8 +49,8 @@ func (e *Engine) PrunePlan(ctx context.Context, ref string) (PrunePlan, error) {
 	return plan, nil
 }
 
-// PruneResult reports the outcome of a prune.
-type PruneResult struct {
+// DropfromResult reports the outcome of a dropfrom.
+type DropfromResult struct {
 	Target      string
 	Deleted     int
 	HeadMovedTo string // "" when HEAD did not move
@@ -58,34 +58,34 @@ type PruneResult struct {
 	Reclaimed   GCResult
 }
 
-// Prune deletes a state and its whole subtree (docs/SPEC.md §5). If HEAD is inside
+// Dropfrom deletes a state and its whole subtree (docs/SPEC.md §5). If HEAD is inside
 // the subtree it is first moved to the target's parent and re-materialized
 // (force-settling so an in-flight edit is not lost); pruning the root you are on
 // clears HEAD and leaves the working tree untouched. The subtree is deleted in one
 // transaction, then a GC sweep reclaims the newly unreferenced blobs, all under
 // the write lock.
-func (e *Engine) Prune(ctx context.Context, ref string) (PruneResult, error) {
+func (e *Engine) Dropfrom(ctx context.Context, ref string) (DropfromResult, error) {
 	wl, err := lock.AcquireWrite(ctx, e.writeLockPath())
 	if err != nil {
-		return PruneResult{}, err
+		return DropfromResult{}, err
 	}
 	defer func() { _ = wl.Release() }()
 
 	target, err := e.Resolve(ctx, ref)
 	if err != nil {
-		return PruneResult{}, err
+		return DropfromResult{}, err
 	}
 	g, err := e.loadGraph(ctx)
 	if err != nil {
-		return PruneResult{}, err
+		return DropfromResult{}, err
 	}
 	sub := g.subtree(target)
 
 	head, err := e.q.GetHead(ctx)
 	if err != nil {
-		return PruneResult{}, fmt.Errorf("reading HEAD: %w", err)
+		return DropfromResult{}, fmt.Errorf("reading HEAD: %w", err)
 	}
-	res := PruneResult{Target: target}
+	res := DropfromResult{Target: target}
 
 	headInSub := false
 	if head.Valid {
@@ -95,15 +95,15 @@ func (e *Engine) Prune(ctx context.Context, ref string) (PruneResult, error) {
 		if parent := g.byID[target].ParentID; parent.Valid {
 			// Relocate HEAD to the target's parent, force-settling and materializing
 			// so the working tree matches the surviving state.
-			if _, err := e.restoreToLocked(ctx, parent.String); err != nil {
-				return PruneResult{}, fmt.Errorf("relocating HEAD before prune: %w", err)
+			if _, err := e.goToLocked(ctx, parent.String); err != nil {
+				return DropfromResult{}, fmt.Errorf("relocating HEAD before dropfrom: %w", err)
 			}
 			res.HeadMovedTo = parent.String
 			// The force-settle may have recorded a state under the old HEAD (inside
 			// the subtree); reload so it is deleted too.
 			g, err = e.loadGraph(ctx)
 			if err != nil {
-				return PruneResult{}, err
+				return DropfromResult{}, err
 			}
 			sub = g.subtree(target)
 		} else {
@@ -115,13 +115,13 @@ func (e *Engine) Prune(ctx context.Context, ref string) (PruneResult, error) {
 
 	order := g.deletionOrder(sub)
 	if err := e.deleteStates(ctx, order); err != nil {
-		return PruneResult{}, err
+		return DropfromResult{}, err
 	}
 	res.Deleted = len(order)
 
 	gc, err := e.gcLocked(ctx)
 	if err != nil {
-		return PruneResult{}, fmt.Errorf("reclaiming blobs: %w", err)
+		return DropfromResult{}, fmt.Errorf("reclaiming blobs: %w", err)
 	}
 	res.Reclaimed = gc
 	return res, nil

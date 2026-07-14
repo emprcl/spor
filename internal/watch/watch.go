@@ -53,9 +53,9 @@ type Event struct {
 	Err  error  // set for Error
 }
 
-// SnapshotFunc performs one snapshot and reports whether a state was created and
+// SnapFunc performs one snapshot and reports whether a state was created and
 // its id, for the live log. The watcher supplies the context so a stop cancels it.
-type SnapshotFunc func(ctx context.Context) (created bool, id string, err error)
+type SnapFunc func(ctx context.Context) (created bool, id string, err error)
 
 // Watcher watches a project tree and snapshots it when it settles.
 type Watcher struct {
@@ -64,7 +64,7 @@ type Watcher struct {
 	fsw      *fsnotify.Watcher
 	settle   time.Duration
 	maxWait  time.Duration
-	snapshot SnapshotFunc
+	snapshot SnapFunc
 	log      func(Event)
 
 	dirty chan struct{}   // coalesced change signal (capacity 1)
@@ -91,7 +91,7 @@ func WithTiming(settle, maxWait time.Duration) Option {
 
 // New creates a Watcher over root. snapshot is invoked on each settle; log
 // receives live-monitor events (both may run on the watcher's goroutines).
-func New(root string, snapshot SnapshotFunc, log func(Event), opts ...Option) (*Watcher, error) {
+func New(root string, snapshot SnapFunc, log func(Event), opts ...Option) (*Watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err

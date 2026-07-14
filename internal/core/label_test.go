@@ -23,7 +23,7 @@ func TestLabelSetsAndResolves(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "1")
-	id := snapshotID(t, eng)
+	id := snapID(t, eng)
 
 	res, err := eng.Label(ctx, "@", "milestone")
 	if err != nil {
@@ -61,11 +61,11 @@ func TestListLabels(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "1")
-	a := snapshotID(t, eng)
+	a := snapID(t, eng)
 	write(t, root, "f", "2")
-	b := snapshotID(t, eng)
+	b := snapID(t, eng)
 	write(t, root, "f", "3")
-	snapshotID(t, eng) // left unlabeled
+	snapID(t, eng) // left unlabeled
 
 	if _, err := eng.Label(ctx, b, "zeta"); err != nil {
 		t.Fatalf("labeling b: %v", err)
@@ -95,7 +95,7 @@ func TestListLabelsEmpty(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 	write(t, root, "f", "1")
-	snapshotID(t, eng)
+	snapID(t, eng)
 
 	got, err := eng.ListLabels(ctx)
 	if err != nil {
@@ -111,7 +111,7 @@ func TestLabelRejectsEmptyName(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 	write(t, root, "f", "1")
-	snapshotID(t, eng)
+	snapID(t, eng)
 
 	if _, err := eng.Label(ctx, "@", ""); err == nil {
 		t.Fatal("Label with an empty name should error")
@@ -126,9 +126,9 @@ func TestLabelUniqueAcrossStates(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "1")
-	a := snapshotID(t, eng)
+	a := snapID(t, eng)
 	write(t, root, "f", "2")
-	b := snapshotID(t, eng)
+	b := snapID(t, eng)
 
 	if _, err := eng.Label(ctx, a, "v1"); err != nil {
 		t.Fatalf("labeling a: %v", err)
@@ -150,17 +150,17 @@ func TestLabelUniqueAcrossStates(t *testing.T) {
 	}
 }
 
-// TestSnapshotLabelMustBeUnique checks a new snapshot cannot reuse a label.
-func TestSnapshotLabelMustBeUnique(t *testing.T) {
+// TestSnapLabelMustBeUnique checks a new snapshot cannot reuse a label.
+func TestSnapLabelMustBeUnique(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 
 	write(t, root, "f", "1")
-	if _, err := eng.Snapshot(ctx, SnapshotOptions{Label: "tag"}); err != nil {
+	if _, err := eng.Snap(ctx, SnapOptions{Label: "tag"}); err != nil {
 		t.Fatalf("first snapshot: %v", err)
 	}
 	write(t, root, "f", "2")
-	if _, err := eng.Snapshot(ctx, SnapshotOptions{Label: "tag"}); err == nil {
+	if _, err := eng.Snap(ctx, SnapOptions{Label: "tag"}); err == nil {
 		t.Fatal("second snapshot reusing the label should fail")
 	}
 }
@@ -170,7 +170,7 @@ func TestLabelUnknownRef(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 	write(t, root, "f", "1")
-	snapshotID(t, eng)
+	snapID(t, eng)
 
 	if _, err := eng.Label(ctx, "ZZZZZZ", "x"); err == nil {
 		t.Fatal("Label of a non-matching ref should error")

@@ -20,12 +20,12 @@ _Feel free to [open an issue](https://github.com/emprcl/spor/issues/new)._
 
 ## Usage
 
-Early development: the `snapshot` command works today. Run it inside a project to
+Early development: the `snap` command works today. Run it inside a project to
 record its current state.
 
 ```sh
-spor snapshot            # record the current project state
-spor snapshot -m "wip"   # ...with a label
+spor snap            # record the current project state
+spor snap -l "wip"   # ...with a label
 ```
 
 ## Documentation

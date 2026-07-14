@@ -78,13 +78,13 @@ func runWatchLive(ctx context.Context, eng *core.Engine, root string, f *os.File
 	defer v.leave() // idempotent: always restores the terminal, even on error
 
 	// Capture the current tree immediately so there is a baseline, then paint.
-	if _, err := eng.Snapshot(ctx, core.SnapshotOptions{}); err != nil {
+	if _, err := eng.Snap(ctx, core.SnapOptions{}); err != nil {
 		return err
 	}
 	v.repaint(ctx)
 
 	snap := func(ctx context.Context) (bool, string, error) {
-		res, err := eng.Snapshot(ctx, core.SnapshotOptions{})
+		res, err := eng.Snap(ctx, core.SnapOptions{})
 		return res.Created, res.StateID, err
 	}
 	w, err := watch.New(root, snap, func(ev watch.Event) { v.onEvent(ctx, ev) })
@@ -92,7 +92,7 @@ func runWatchLive(ctx context.Context, eng *core.Engine, root string, f *os.File
 		return err
 	}
 
-	// Out-of-band changes (prune, reroot, restore, undo/redo run from another
+	// Out-of-band changes (dropfrom, keepfrom, go, undo/redo run from another
 	// terminal) mutate the state graph without producing filesystem events, so the
 	// watcher pipeline never fires for them. A low-frequency poll repaints when the
 	// tree has changed; the frame dedup in repaintLocked makes an unchanged poll a
@@ -280,14 +280,14 @@ func runWatchStream(ctx context.Context, eng *core.Engine, root string, w io.Wri
 	fmt.Fprintln(out, styleWatchHint.Render("recording changes as they happen. press Ctrl+C to stop."))
 
 	// Capture the current tree immediately so there is a baseline.
-	if res, err := eng.Snapshot(ctx, core.SnapshotOptions{}); err != nil {
+	if res, err := eng.Snap(ctx, core.SnapOptions{}); err != nil {
 		return err
 	} else if res.Created {
 		logWatch(out, watch.Event{Kind: watch.Created, ID: res.StateID})
 	}
 
 	snap := func(ctx context.Context) (bool, string, error) {
-		res, err := eng.Snapshot(ctx, core.SnapshotOptions{})
+		res, err := eng.Snap(ctx, core.SnapOptions{})
 		return res.Created, res.StateID, err
 	}
 	w2, err := watch.New(root, snap, func(ev watch.Event) { logWatch(out, ev) })
@@ -318,7 +318,7 @@ func logWatch(w io.Writer, ev watch.Event) {
 	switch ev.Kind {
 	case watch.Created:
 		fmt.Fprintln(w, ts+"  "+styleWatchDot.Render("●")+"  "+
-			styleWatchPath.Render(ev.ID)+"  "+styleWatchHint.Render("snapshot"))
+			styleWatchPath.Render(ev.ID)+"  "+styleWatchHint.Render("snap"))
 	case watch.Error:
 		fmt.Fprintln(w, ts+"  "+styleWatchErr.Render("✗")+"  "+ev.Err.Error())
 	case watch.Settling, watch.NoChange:

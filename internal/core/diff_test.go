@@ -10,12 +10,12 @@ import (
 // snap runs a snapshot and fails the test if it does not record a new state.
 func snap(t *testing.T, eng *Engine) string {
 	t.Helper()
-	res, err := eng.Snapshot(context.Background(), SnapshotOptions{})
+	res, err := eng.Snap(context.Background(), SnapOptions{})
 	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
+		t.Fatalf("Snap: %v", err)
 	}
 	if !res.Created {
-		t.Fatalf("Snapshot recorded nothing; expected a new state")
+		t.Fatalf("Snap recorded nothing; expected a new state")
 	}
 	return res.StateID
 }

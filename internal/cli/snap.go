@@ -9,13 +9,13 @@ import (
 	"github.com/emprcl/spor/internal/core"
 )
 
-// newSnapshotCmd builds `spor snapshot`, the manual, watcher-free way to record
+// newSnapCmd builds `spor snap`, the manual, watcher-free way to record
 // a state (docs/SPEC.md §4, §6).
-func newSnapshotCmd() *cobra.Command {
+func newSnapCmd() *cobra.Command {
 	var label string
 
 	cmd := &cobra.Command{
-		Use:   "snapshot",
+		Use:   "snap",
 		Short: "Record the current project state now",
 		Long: "Walk the project in the current directory and record it as a new state. " +
 			"If nothing changed since the last state, nothing is recorded.",
@@ -33,15 +33,15 @@ func newSnapshotCmd() *cobra.Command {
 			}
 			defer eng.Close()
 
-			res, err := eng.Snapshot(ctx, core.SnapshotOptions{Label: label})
+			res, err := eng.Snap(ctx, core.SnapOptions{Label: label})
 			if err != nil {
 				return err
 			}
 			if !res.Created {
-				fmt.Fprintln(cmd.OutOrStdout(), "nothing to snapshot")
+				fmt.Fprintln(cmd.OutOrStdout(), "nothing to snap")
 				return nil
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "snapshot %s\n", res.StateID)
+			fmt.Fprintf(cmd.OutOrStdout(), "snap %s\n", res.StateID)
 			return nil
 		},
 	}

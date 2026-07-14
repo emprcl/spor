@@ -30,7 +30,7 @@ func execBit(t *testing.T, eng *Engine, stateID, path string) int64 {
 	return v
 }
 
-func TestSnapshotCapturesAndChmodMakesState(t *testing.T) {
+func TestSnapCapturesAndChmodMakesState(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the filesystem does not report the execute bit on Windows")
 	}
@@ -43,9 +43,9 @@ func TestSnapshotCapturesAndChmodMakesState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s1, err := eng.Snapshot(ctx, SnapshotOptions{})
+	s1, err := eng.Snap(ctx, SnapOptions{})
 	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
+		t.Fatalf("Snap: %v", err)
 	}
 	if got := execBit(t, eng, s1.StateID, "run.sh"); got != 1 {
 		t.Errorf("run.sh executable = %d, want 1", got)
@@ -58,9 +58,9 @@ func TestSnapshotCapturesAndChmodMakesState(t *testing.T) {
 	if err := os.Chmod(filepath.Join(root, "run.sh"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s2, err := eng.Snapshot(ctx, SnapshotOptions{})
+	s2, err := eng.Snap(ctx, SnapOptions{})
 	if err != nil {
-		t.Fatalf("Snapshot after chmod: %v", err)
+		t.Fatalf("Snap after chmod: %v", err)
 	}
 	if !s2.Created {
 		t.Fatal("chmod with no content change did not record a state")

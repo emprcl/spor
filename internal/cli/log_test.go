@@ -69,7 +69,7 @@ func TestRenderLogBranching(t *testing.T) {
 }
 
 func TestRenderLogEmpty(t *testing.T) {
-	if out := renderPlain(core.LogResult{}); !strings.Contains(out, "No snapshots yet") {
+	if out := renderPlain(core.LogResult{}); !strings.Contains(out, "No snaps yet") {
 		t.Fatalf("empty log = %q", out)
 	}
 }

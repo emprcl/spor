@@ -20,17 +20,17 @@ func Root() *cobra.Command {
 	}
 
 	root.AddCommand(newWatchCmd())
-	root.AddCommand(newSnapshotCmd())
+	root.AddCommand(newSnapCmd())
 	root.AddCommand(newLogCmd())
-	root.AddCommand(newRestoreCmd())
+	root.AddCommand(newGoCmd())
 	root.AddCommand(newDiffCmd())
 	root.AddCommand(newLabelCmd())
 	root.AddCommand(newUndoCmd())
 	root.AddCommand(newRedoCmd())
 	root.AddCommand(newStatusCmd())
 	root.AddCommand(newForgetCmd())
-	root.AddCommand(newPruneCmd())
-	root.AddCommand(newRerootCmd())
+	root.AddCommand(newDropfromCmd())
+	root.AddCommand(newKeepfromCmd())
 	root.AddCommand(newGCCmd())
 	root.AddCommand(newVerifyCmd())
 

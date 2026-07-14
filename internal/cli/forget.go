@@ -23,7 +23,7 @@ func newForgetCmd() *cobra.Command {
 		Short: "Delete the entire spor store for this project",
 		Long: "Permanently remove the .spor store: every state, all history, and all " +
 			"blobs. Your working files are left untouched. This cannot be undone. " +
-			"Afterwards the project is no longer tracked, and the next snapshot or " +
+			"Afterwards the project is no longer tracked, and the next snap or " +
 			"'spor watch' starts a fresh store.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

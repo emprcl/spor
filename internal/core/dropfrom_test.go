@@ -51,9 +51,9 @@ func mustVerifyClean(t *testing.T, eng *Engine) {
 	}
 }
 
-// TestPruneLeafMovesHeadToParent prunes the current leaf state: HEAD moves to the
+// TestDropfromLeafMovesHeadToParent prunes the current leaf state: HEAD moves to the
 // parent, the working tree is re-materialized, and the leaf's blob is reclaimed.
-func TestPruneLeafMovesHeadToParent(t *testing.T) {
+func TestDropfromLeafMovesHeadToParent(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 	write(t, root, "f.txt", "A")
@@ -61,17 +61,17 @@ func TestPruneLeafMovesHeadToParent(t *testing.T) {
 	write(t, root, "f.txt", "B")
 	s2 := snap(t, eng)
 
-	plan, err := eng.PrunePlan(ctx, s2)
+	plan, err := eng.DropfromPlan(ctx, s2)
 	if err != nil {
-		t.Fatalf("PrunePlan: %v", err)
+		t.Fatalf("DropfromPlan: %v", err)
 	}
 	if plan.StatesToDelete != 1 || !plan.HeadWillMove || plan.HeadTarget != s1 {
 		t.Fatalf("plan = %+v, want delete 1, HEAD -> %s", plan, s1)
 	}
 
-	res, err := eng.Prune(ctx, s2)
+	res, err := eng.Dropfrom(ctx, s2)
 	if err != nil {
-		t.Fatalf("Prune: %v", err)
+		t.Fatalf("Dropfrom: %v", err)
 	}
 	if res.Deleted != 1 || res.HeadMovedTo != s1 {
 		t.Fatalf("res = %+v, want Deleted 1, HeadMovedTo %s", res, s1)
@@ -86,29 +86,29 @@ func TestPruneLeafMovesHeadToParent(t *testing.T) {
 		t.Errorf("states = %d, want 1", n)
 	}
 	if res.Reclaimed.Removed < 1 {
-		t.Errorf("expected the pruned leaf's blob to be reclaimed, got %d", res.Reclaimed.Removed)
+		t.Errorf("expected the dropped leaf's blob to be reclaimed, got %d", res.Reclaimed.Removed)
 	}
 	mustVerifyClean(t, eng)
 }
 
-// TestPruneSiblingBranchKeepsHead prunes a branch HEAD is not on: HEAD and the
+// TestDropfromSiblingBranchKeepsHead prunes a branch HEAD is not on: HEAD and the
 // working tree are untouched, only the sibling subtree is removed.
-func TestPruneSiblingBranchKeepsHead(t *testing.T) {
+func TestDropfromSiblingBranchKeepsHead(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 	write(t, root, "f.txt", "A")
 	s1 := snap(t, eng)
 	write(t, root, "f.txt", "B")
 	s2 := snap(t, eng)
-	if _, err := eng.Restore(ctx, s1); err != nil {
-		t.Fatalf("Restore: %v", err)
+	if _, err := eng.Go(ctx, s1); err != nil {
+		t.Fatalf("Go: %v", err)
 	}
 	write(t, root, "f.txt", "C")
 	s3 := snap(t, eng) // s1 -> {s2, s3}, HEAD = s3
 
-	res, err := eng.Prune(ctx, s2)
+	res, err := eng.Dropfrom(ctx, s2)
 	if err != nil {
-		t.Fatalf("Prune: %v", err)
+		t.Fatalf("Dropfrom: %v", err)
 	}
 	if res.Deleted != 1 || res.HeadMovedTo != "" {
 		t.Fatalf("res = %+v, want Deleted 1 and HEAD unchanged", res)
@@ -125,9 +125,9 @@ func TestPruneSiblingBranchKeepsHead(t *testing.T) {
 	mustVerifyClean(t, eng)
 }
 
-// TestPruneRootWipesHistoryKeepsFiles prunes the root while HEAD is on it: all
+// TestDropfromRootWipesHistoryKeepsFiles prunes the root while HEAD is on it: all
 // history is removed and HEAD clears, but the working files are left alone.
-func TestPruneRootWipesHistoryKeepsFiles(t *testing.T) {
+func TestDropfromRootWipesHistoryKeepsFiles(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 	write(t, root, "f.txt", "A")
@@ -135,17 +135,17 @@ func TestPruneRootWipesHistoryKeepsFiles(t *testing.T) {
 	write(t, root, "f.txt", "B")
 	snap(t, eng)
 
-	plan, err := eng.PrunePlan(ctx, s1)
+	plan, err := eng.DropfromPlan(ctx, s1)
 	if err != nil {
-		t.Fatalf("PrunePlan: %v", err)
+		t.Fatalf("DropfromPlan: %v", err)
 	}
 	if !plan.WipesEntireStore || plan.StatesToDelete != 2 {
 		t.Fatalf("plan = %+v, want WipesEntireStore with 2 states", plan)
 	}
 
-	res, err := eng.Prune(ctx, s1)
+	res, err := eng.Dropfrom(ctx, s1)
 	if err != nil {
-		t.Fatalf("Prune: %v", err)
+		t.Fatalf("Dropfrom: %v", err)
 	}
 	if res.Deleted != 2 || !res.HeadCleared {
 		t.Fatalf("res = %+v, want Deleted 2 and HeadCleared", res)

@@ -39,7 +39,7 @@ func newRedoCmd() *cobra.Command {
 		Short: "Step forward to a state you undid",
 		Long: "Move forward n states (default 1), following the branch you most " +
 			"recently left. If you ask for more steps than exist, it stops at the " +
-			"newest state. Other branches are reached with 'log' and 'restore'.",
+			"newest state. Other branches are reached with 'log' and 'go'.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			n, err := parseSteps(args)

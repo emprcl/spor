@@ -18,12 +18,12 @@ func TestLogReturnsStatesAndHead(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f.txt", "1")
-	s1, err := eng.Snapshot(ctx, SnapshotOptions{Label: "one"})
+	s1, err := eng.Snap(ctx, SnapOptions{Label: "one"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	write(t, root, "f.txt", "2")
-	s2, err := eng.Snapshot(ctx, SnapshotOptions{})
+	s2, err := eng.Snap(ctx, SnapOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

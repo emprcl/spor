@@ -22,7 +22,7 @@ func TestGCRemovesOrphansKeepsReferenced(t *testing.T) {
 		t.Fatal("expected at least one referenced blob")
 	}
 
-	// An orphan blob, referenced by no state (as an abandoned snapshot or prune
+	// An orphan blob, referenced by no state (as an abandoned snapshot or dropfrom
 	// would leave behind).
 	orphan, err := eng.blobs.Put(strings.NewReader("orphan data"))
 	if err != nil {

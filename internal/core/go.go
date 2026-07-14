@@ -15,11 +15,11 @@ import (
 	"github.com/emprcl/spor/internal/lock"
 )
 
-// RestoreResult reports the outcome of a restore. Settled is true when the
+// GoResult reports the outcome of a restore. Settled is true when the
 // force-settle step recorded a pre-restore state (i.e. there were uncommitted
 // edits); SettledID names it. Written and Deleted count the files touched while
 // materializing the target.
-type RestoreResult struct {
+type GoResult struct {
 	StateID   string // the restored state, now HEAD
 	Settled   bool
 	SettledID string
@@ -27,7 +27,7 @@ type RestoreResult struct {
 	Deleted   int
 }
 
-// Restore materializes a past state into the working tree and points HEAD at it,
+// Go materializes a past state into the working tree and points HEAD at it,
 // per docs/SPEC.md §5. It runs entirely under the write lock:
 //
 //  1. force-settle by snapshotting the current tree, so an in-flight edit is not
@@ -37,12 +37,12 @@ type RestoreResult struct {
 //     target's, never touching untracked or ignored paths;
 //  3. set HEAD to the target and journal the move.
 //
-// Restore is not atomic: a crash mid-materialization leaves a mixed tree that
+// Go is not atomic: a crash mid-materialization leaves a mixed tree that
 // re-running restore repairs, since step 1 already recorded the pre-restore tree.
-func (e *Engine) Restore(ctx context.Context, ref string) (RestoreResult, error) {
+func (e *Engine) Go(ctx context.Context, ref string) (GoResult, error) {
 	wl, err := lock.AcquireWrite(ctx, e.writeLockPath())
 	if err != nil {
-		return RestoreResult{}, err
+		return GoResult{}, err
 	}
 	defer func() { _ = wl.Release() }()
 
@@ -52,30 +52,30 @@ func (e *Engine) Restore(ctx context.Context, ref string) (RestoreResult, error)
 	// id that survives the snapshot (docs/SPEC.md §5, §6).
 	target, err := e.Resolve(ctx, ref)
 	if err != nil {
-		return RestoreResult{}, err
+		return GoResult{}, err
 	}
-	return e.restoreToLocked(ctx, target)
+	return e.goToLocked(ctx, target)
 }
 
-// restoreToLocked materializes an already-chosen target state into the working
+// goToLocked materializes an already-chosen target state into the working
 // tree and moves HEAD to it. The caller must already hold the write lock and
 // must have chosen target before this runs, since the force-settle here mutates
 // history. It is the shared tail of restore, undo, and redo (docs/SPEC.md §5).
-func (e *Engine) restoreToLocked(ctx context.Context, target string) (RestoreResult, error) {
+func (e *Engine) goToLocked(ctx context.Context, target string) (GoResult, error) {
 	// Step 1: force-settle. A one-shot restore cannot drain another process's
 	// debounce timer, so it snapshots itself.
-	settle, err := e.snapshotLocked(ctx, SnapshotOptions{})
+	settle, err := e.snapLocked(ctx, SnapOptions{})
 	if err != nil {
-		return RestoreResult{}, fmt.Errorf("force-settling before restore: %w", err)
+		return GoResult{}, fmt.Errorf("force-settling before restore: %w", err)
 	}
 
 	// Steps 2 and 3: materialize the target over the current tree and move HEAD.
 	written, deleted, err := e.materializeTo(ctx, target)
 	if err != nil {
-		return RestoreResult{}, err
+		return GoResult{}, err
 	}
 
-	res := RestoreResult{StateID: target, Written: written, Deleted: deleted}
+	res := GoResult{StateID: target, Written: written, Deleted: deleted}
 	if settle.Created {
 		res.Settled = true
 		res.SettledID = settle.StateID
@@ -85,7 +85,7 @@ func (e *Engine) restoreToLocked(ctx context.Context, target string) (RestoreRes
 
 // materializeTo writes target's manifest into the working tree and points HEAD at
 // it, without force-settling first (the caller decides whether to settle). It is
-// the shared tail of restore and of the HEAD relocation prune/reroot perform when
+// the shared tail of restore and of the HEAD relocation dropfrom/keepfrom perform when
 // the current branch is about to be dropped. The caller must hold the write lock.
 // The post-settle HEAD manifest is the authority for which files to delete, so
 // callers that need the working tree to match HEAD should settle beforehand.

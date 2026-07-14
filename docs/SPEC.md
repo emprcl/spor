@@ -18,7 +18,7 @@ complete contents of the project at one moment.
 Experience:
 
 - States are created by a single **snapshot** operation, triggered either
-  manually (`spor snapshot`) or automatically by a watcher that runs while
+  manually (`spor snap`) or automatically by a watcher that runs while
   `spor watch` is open. Either way the user never writes a commit message or
   stages anything.
 - Recording happens *while `spor` is running*, in the foreground; closing it
@@ -56,7 +56,7 @@ be changed by explicit history operations (§5).
 
 | Identifier | Value | Purpose |
 |---|---|---|
-| **State ID** | opaque ULID | Names a state. Deliberately **not** derived from content or parent, so prune/reroot/compact can re-parent states without cascading new IDs down the subtree (the Git-rebase problem). |
+| **State ID** | opaque ULID | Names a state. Deliberately **not** derived from content or parent, so dropfrom/keepfrom/fold can re-parent states without cascading new IDs down the subtree (the Git-rebase problem). |
 | **Manifest hash** | `SHA-256` of the canonical manifest (sorted `path → blob_hash → exec`) | Detects whether project *contents* changed (drives no-op suppression). |
 | **Blob hash** | `SHA-256(content)` | Content-addresses file contents. This is where **deduplication** lives. |
 
@@ -89,12 +89,12 @@ multiple roots exist). Multi-parent merges are out of scope. A single persisted
 
 - new states descend from `HEAD`, and creating one advances it (same
   transaction);
-- restore, prune, reroot, and compact move `HEAD` as described in §5.
+- go, dropfrom, keepfrom, and fold move `HEAD` as described in §5.
 
 `HEAD` is what makes "edit a restored state → new timeline" work: after a
 restore, the next state descends from the restored state, not the previous tip.
 
-Every `HEAD` move (snapshot, restore, undo, redo, prune, reroot, compact) is also
+Every `HEAD` move (snap, go, undo, redo, dropfrom, keepfrom, fold) is also
 appended to a small **HEAD journal** (`head_history`: state id + timestamp).
 The journal is what gives `redo` its meaning ("return to the state I just
 left"). It is purely additive metadata: the tree never depends on it, and it
@@ -162,7 +162,7 @@ meaning nothing is re-stored.
 > **Tradeoff:** blobs are whole-file, so a one-pixel PNG edit re-stores the
 > whole file. Accepted for v1. Content-defined chunking is the clean upgrade
 > path for media dedup and doesn't disturb the rest of the model. Whole blobs
-> (vs delta chains) are also what keep prune/reroot/compact/GC simple: a state's data
+> (vs delta chains) are also what keep dropfrom/keepfrom/fold/GC simple: a state's data
 > is never entangled with a neighbor's.
 
 ---
@@ -181,7 +181,7 @@ for free.
 
 Two triggers call it:
 
-- **Manual**: `spor snapshot` runs it once and exits. spor is fully usable this
+- **Manual**: `spor snap` runs it once and exits. spor is fully usable this
   way with no watcher (a deliberate, git-like rhythm; also what makes it
   scriptable and testable).
 - **Automatic**: the watcher calls it when the filesystem settles (below).
@@ -303,17 +303,17 @@ atomic-save burst or a project-wide save-all.
 
 ## 5. Operations
 
-All operations produce or remove whole states. History editing (prune, reroot,
-compact) is **destructive but never rewriting**: it removes states from the tree
+All operations produce or remove whole states. History editing (dropfrom, keepfrom,
+fold) is **destructive but never rewriting**: it removes states from the tree
 but never alters what a surviving state contains. Both rely on opaque State IDs (no
 ID cascade on re-parent) and on GC (§8) to reclaim now-unreferenced blobs.
 
-### Restore
+### Go
 
 Materialize a state's working directory exactly and set `HEAD` to it. Because
-recording is debounced, restore **force-settles first** so an in-flight edit
-isn't lost. A one-shot `spor restore` cannot drain another process's debounce
-timer, so force-settling means restore performs a snapshot itself:
+recording is debounced, `go` **force-settles first** so an in-flight edit
+isn't lost. A one-shot `spor go` cannot drain another process's debounce
+timer, so force-settling means `go` takes a snapshot itself:
 
 1. under the write lock, run the normal walk → create-state path (a no-op if
    nothing changed);
@@ -321,50 +321,27 @@ timer, so force-settling means restore performs a snapshot itself:
    the stored execute bit), and delete every path that is in `HEAD`'s manifest
    but not in the target's. Paths outside `HEAD`'s manifest, untracked or
    ignored (`.git/`, `node_modules/`, build artifacts), are **never touched**;
-3. set `HEAD` to the restored state (journal appended).
+3. set `HEAD` to the target state (journal appended).
 
-The watcher's next settle then sees the restored tree and records nothing
-(no-op suppression). Restore never modifies existing states, and the
-pre-restore edit survives as its own state, so restore is itself undoable.
+The watcher's next settle then sees the materialized tree and records nothing
+(no-op suppression). `go` never modifies existing states, and the edit made
+just before it survives as its own state, so `go` is itself undoable.
 
-Restore is not atomic: a crash mid-materialization leaves a mixed working tree.
-Recovery is re-running the restore; nothing was lost, since step 1 already
-recorded the pre-restore tree.
+`go` is not atomic: a crash mid-materialization leaves a mixed working tree.
+Recovery is re-running it; nothing was lost, since step 1 already recorded the
+pre-existing tree.
 
-### Apply
-
-Cherry-pick one state's changes onto the current state: compute the delta
-`diff(parent(ref), ref)` (a parentless `ref` counts as a delta from empty, i.e.
-pure additions) and replay it onto `HEAD`'s contents, producing a new state
-with a **single** parent (`HEAD`). No merge commits, no multiple parents; the
-tree topology is preserved.
-
-Each path in the delta resolves three-way, with *base* = its version in
-`parent(ref)`, *theirs* = in `ref`, *ours* = in `HEAD`:
-
-- *ours* == *base* (unchanged here): take *theirs*, including deletions;
-- *ours* == *theirs* (both sides agree): nothing to do;
-- both changed, both text: **diff3 merge**; a clean merge takes the merged
-  content, overlapping hunks write standard conflict markers into the file and
-  the apply is reported as conflicted. Nothing is lost: the pre-apply state
-  still exists, and resolving the markers is just editing toward the next
-  state;
-- both changed, at least one side binary: the applied state's version wins,
-  reported;
-- modify/delete (deleted on one side, modified on the other): the surviving
-  modified file is kept, reported.
-
-### Prune: delete a state and its whole subtree
+### Dropfrom: delete a state and its whole subtree
 
 1. If `HEAD` is inside the subtree, move it to the target's **parent** and
-   re-materialize (force-settle first). Pruning the root deletes all history;
+   re-materialize (force-settle first). Dropping from the root deletes all history;
    require explicit confirmation.
 2. Delete the subtree's rows in one transaction.
 3. GC sweep reclaims newly-unreferenced blobs.
 
-### Reroot: make a state the new root, dropping the rest
+### Keepfrom: make a state the new root, dropping the rest
 
-The dual of prune: where prune deletes a state's subtree, reroot keeps **only**
+The dual of dropfrom: where dropfrom deletes a state's subtree, keepfrom keeps **only**
 that subtree. Given target `S`, the survivors are `S` and its descendants;
 everything else, `S`'s ancestors and any side branches hanging off them, is
 dropped, and `S` becomes a root. This is how a long project forgets old history
@@ -378,11 +355,11 @@ and reclaims its space while keeping everything from a chosen point forward.
    the `parent_id` foreign key is never violated.
 5. GC sweep reclaims newly-unreferenced blobs.
 
-Like prune it is destructive but never rewriting: no surviving state's contents
-change, only `S`'s parent link. Rerooting at an existing root is a no-op.
-`reroot` should feel heavy: confirm and report exactly what will be destroyed.
+Like dropfrom it is destructive but never rewriting: no surviving state's contents
+change, only `S`'s parent link. Keeping from an existing root is a no-op.
+`keepfrom` should feel heavy: confirm and report exactly what will be destroyed.
 
-### Compact: squash a linear range into one state
+### Fold: squash a linear range into one state
 
 Given ancestor `A` and descendant `B`:
 
@@ -398,7 +375,7 @@ Intermediate snapshots are intentionally lost; only the start boundary
 ### Forget: remove the store entirely
 
 The escape hatch out of "infinite undo": delete the whole `.spor/` store, every
-state and blob, and stop tracking the project. Unlike prune/reroot/compact,
+state and blob, and stop tracking the project. Unlike dropfrom/keepfrom/fold,
 which edit the tree but keep the store and your files, `forget` operates on the
 store as a whole and leaves nothing behind to reclaim.
 
@@ -409,7 +386,7 @@ store as a whole and leaves nothing behind to reclaim.
 3. Close the database and remove the `.spor/` directory wholesale.
 
 Working files are **never touched**, only `.spor/`. Afterwards the project is
-untracked again, and the next `snapshot` or `spor watch` creates a fresh store
+untracked again, and the next `snap` or `spor watch` creates a fresh store
 from scratch (§3, implicit init).
 
 ### Diffs
@@ -439,7 +416,7 @@ settle window, so the working tree is continuously kept identical to `@`.
 | `mylabel` | a state the user named |
 | `2h ago`, `3d`, `yesterday`, `"friday 3pm"` | a time (the word `ago` is optional) |
 
-Trailing positional args are joined into the ref, so `spor restore 2h ago`
+Trailing positional args are joined into the ref, so `spor go 2h ago`
 works without quoting. A bare token is resolved in this precedence:
 
 1. `@` / `@~n`, explicit sigils
@@ -457,8 +434,8 @@ branch. Creation times strictly increase along any ancestor chain, so this is
 well defined even after a restore to an old state.
 
 `@` is only useful as an *operand that names the current state* (`label @ …`,
-`compact @~5 @`, `prune @`, and the implicit "to now" end of a diff).
-`restore @` and any working-dir diff are no-ops and are not use cases.
+`fold @~5 @`, `dropfrom @`, and the implicit "to now" end of a diff).
+`go @` and any working-dir diff are no-ops and are not use cases.
 
 ### Commands
 
@@ -467,24 +444,24 @@ well defined even after a restore to an old state.
 | Command | Effect |
 |---|---|
 | `spor watch` | run the watcher in the foreground, showing the history **tree** repainting live as states appear (the same view as `spor log`); Ctrl+C stops watching |
-| `spor snapshot [-l <label>]` | create one state now, then exit; the watcher-free, scriptable path |
+| `spor snap [-l <label>]` | create one state now, then exit; the watcher-free, scriptable path |
 | `spor log` | show the timeline as a **tree** (branches visible), newest first, marking `@` |
 | `spor undo [n]` / `spor redo [n]` | step back / forward `n` states (clamped to the history boundary) |
-| `spor restore <ref>` | jump to any state |
+| `spor go <ref>` | jump to any state |
 
 `spor watch` is, for v1, a live monitor only: it shows states appearing, the
 settle indicator, and where `@` is. A full interactive TUI (navigating and
-driving restore/prune/label from within it) is deferred; until then, mutations
+driving go/dropfrom/label from within it) is deferred; until then, mutations
 are one-shot CLI commands.
 
 `redo` is intentionally simple: it follows the **most-recently-visited child**
 of `@`, as recorded by the HEAD journal (§2). Because editing after an `undo`
 starts a new branch (the old "future" is never lost), other branches are
-reached via `spor log` + `restore`, not `redo`.
+reached via `spor log` + `go`, not `redo`.
 
 Both **clamp** rather than error: asking to step further than history allows lands
 on the oldest (or newest-visited) state and reports how far it moved, matching the
-undo metaphor. Both are `restore` under the hood, so each force-settles first (an
+undo metaphor. Both are `go` under the hood, so each force-settles first (an
 uncommitted edit survives as a branch) and each is itself reversible.
 
 **Naming & inspecting:**
@@ -503,22 +480,22 @@ working tree.
 
 | Command | Effect |
 |---|---|
-| `spor prune <ref>` | delete a state **and all its descendants**; HEAD moves to its parent |
-| `spor reroot <ref>` | make a state the new root, dropping everything **not** under it (the dual of prune) |
-| `spor compact <a> <b>` | squash the linear range `a`…`b` into one state |
+| `spor dropfrom <ref>` | delete a state **and all its descendants**; HEAD moves to its parent |
+| `spor keepfrom <ref>` | make a state the new root, dropping everything **not** under it (the dual of dropfrom) |
+| `spor fold <a> <b>` | squash the linear range `a`…`b` into one state |
 
-`prune` and `undo` look identical when `@` is a leaf but are not the same:
-`undo` is a reversible cursor move, `prune @` **destroys** the state:
+`dropfrom` and `undo` look identical when `@` is a leaf but are not the same:
+`undo` is a reversible cursor move, `dropfrom @` **destroys** the state:
 
 | | HEAD goes to | The state | Reversible |
 |---|---|---|---|
 | `spor undo` | parent | stays in history | yes (`redo`) |
-| `spor prune @` | parent | destroyed (blobs GC'd) | no |
+| `spor dropfrom @` | parent | destroyed (blobs GC'd) | no |
 
-Because `prune` deletes a whole subtree: on a **leaf** `@` it drops just that
+Because `dropfrom` deletes a whole subtree: on a **leaf** `@` it drops just that
 one state (the "rewind and delete the last state" case); on a **non-leaf** `@`
-(after an undo/restore without editing) it drops the entire forward branch; on
-the **root** it wipes all history. `prune` should feel heavy: confirm
+(after an undo/go without editing) it drops the entire forward branch; on
+the **root** it wipes all history. `dropfrom` should feel heavy: confirm
 destructive cases and report exactly what will be destroyed.
 
 **Starting over** (destructive, removes the whole store):
@@ -529,7 +506,7 @@ destructive cases and report exactly what will be destroyed.
 
 `forget` is the escape hatch out of "infinite undo" (§5): it does not edit the
 tree, it removes the store itself, so every state and blob is gone and the
-project is no longer tracked (the next `snapshot` or `spor watch` starts fresh).
+project is no longer tracked (the next `snap` or `spor watch` starts fresh).
 It refuses while a `spor watch` is running, and because it is irreversible it
 confirms and reports how much will be deleted. It never touches your working
 files, only `.spor/`.
@@ -540,7 +517,7 @@ files, only `.spor/`.
 |---|---|
 | `spor push` / `spor pull` | sync states and blobs with the server |
 | `spor remote add <url>` | configure the server |
-| `spor remote prune <ref>` | delete a subtree **on the server** (sync is otherwise additive-only) |
+| `spor remote dropfrom <ref>` | delete a subtree **on the server** (sync is otherwise additive-only) |
 
 **Maintenance** (rare; GC is mostly automatic):
 
@@ -582,8 +559,8 @@ PUT/GET       /states/<ulid>      upload / download a state (metadata + manifest
   the HEAD journal and the stat cache. Only states and blobs travel.
 
 **Sync is additive-only**, it never deletes. To make the server forget a
-subtree, prune it there explicitly (`spor remote prune <id>`); otherwise a
-later pull re-downloads a locally-pruned state. Upside: the server doubles as a
+subtree, run `dropfrom` there explicitly (`spor remote dropfrom <id>`); otherwise a
+later pull re-downloads a state you dropped locally. Upside: the server doubles as a
 full archive. Tombstones are out of scope for v1.
 
 ---
@@ -596,14 +573,14 @@ corrupted; only the single state being created during a crash may be lost.
 ### Process model: core engine + front-ends
 
 There is **no daemon.** All behavior lives in a UI-agnostic **core engine** (a
-Go package) owning the operations (snapshot, restore, apply, prune, reroot,
-compact, gc, diff, log, label, verify, forget), ref resolution, and locking. Three unprivileged
+Go package) owning the operations (snap, go, dropfrom, keepfrom,
+fold, gc, diff, log, label, verify, forget), ref resolution, and locking. Three unprivileged
 front-ends call it:
 
-- **One-shot CLI** (`spor snapshot`, `spor restore`, …): open store, call one
+- **One-shot CLI** (`spor snap`, `spor go`, …): open store, call one
   op, exit.
 - **The watcher** (`spor watch`): a foreground process whose debounce timer
-  calls `snapshot` on settle, alongside the live log. Ctrl+C stops it.
+  calls `snap` on settle, alongside the live log. Ctrl+C stops it.
 - **A future TUI**: interactive keys calling the same ops.
 
 ### Locking
@@ -612,8 +589,8 @@ Three layers, no process management:
 
 1. **SQLite's own locking** protects the DB file: WAL gives many readers plus
    one writer, and a second writer waits (not errors) with
-   `PRAGMA busy_timeout`. Necessary but not sufficient: a snapshot writes blobs
-   before its transaction and a restore materializes files outside any
+   `PRAGMA busy_timeout`. Necessary but not sufficient: a snap writes blobs
+   before its transaction and a go materializes files outside any
    transaction, so it can't serialize whole operations or the `HEAD`
    read-modify-write.
 
@@ -626,8 +603,8 @@ Three layers, no process management:
    - **Write lock**, held by the core for the *duration of each mutating
      operation*, so all front-ends serialize; reads never take it (so
      `log`/`diff`/`status` always work). Being per-operation, a one-shot
-     `spor restore` runs *while* `spor watch` watches: they serialize, the
-     restore completes under the lock (force-settle included), and the
+     `spor go` runs *while* `spor watch` watches: they serialize, the
+     `go` completes under the lock (force-settle included), and the
      watcher's next settle sees the restored tree as a no-op. Acquired
      blocking with a short timeout.
    - **Watcher lock**, held by `spor watch` for its lifetime, so a project has
@@ -678,11 +655,11 @@ open, it is compared against the version embedded in the binary:
 
 ### Garbage collection
 
-Part of v1, since prune/compact leave blobs unreferenced (and "infinite undo"
+Part of v1, since dropfrom/fold leave blobs unreferenced (and "infinite undo"
 grows without bound). GC is a **mark-sweep** over blobs reachable from all
-surviving states, run after every prune/compact and available as a command. GC
+surviving states, run after every dropfrom/fold and available as a command. GC
 takes the write lock like any other mutating operation, so it can never race an
-in-flight snapshot (whose blobs land on disk before its state row commits). A
+in-flight snap (whose blobs land on disk before its state row commits). A
 blob is never treated as unreferenced without a full reachability pass, and
 sweeping only ever deletes blobs, never state rows, so it can never corrupt a
 surviving state.
@@ -698,8 +675,8 @@ manifest is well-formed and its stored hash recomputes; every `parent` and
 ## 9. Design Principles
 
 - Automatic by default: no manual commits, no visible branches, no staging.
-- State *contents* are immutable; history may be explicitly pruned or
-  compacted, never silently rewritten.
+- State *contents* are immutable; history may be explicitly dropped or
+  folded, never silently rewritten.
 - Content-addressed blob storage (whole blobs, not delta chains).
 - Events trigger; the filesystem walk is the source of truth.
 - Instant restoration.

@@ -12,9 +12,9 @@ import (
 // MoveResult reports a HEAD move by undo or redo. Steps is how many states it
 // actually moved: fewer than requested when the history boundary was reached,
 // and 0 when already at the boundary (in which case nothing was recorded and the
-// embedded RestoreResult only carries the current StateID).
+// embedded GoResult only carries the current StateID).
 type MoveResult struct {
-	RestoreResult
+	GoResult
 	Steps int
 }
 
@@ -59,13 +59,13 @@ func (e *Engine) move(
 		return MoveResult{}, err
 	}
 	if steps == 0 {
-		return MoveResult{RestoreResult: RestoreResult{StateID: id}}, nil
+		return MoveResult{GoResult: GoResult{StateID: id}}, nil
 	}
-	res, err := e.restoreToLocked(ctx, id)
+	res, err := e.goToLocked(ctx, id)
 	if err != nil {
 		return MoveResult{}, err
 	}
-	return MoveResult{RestoreResult: res, Steps: steps}, nil
+	return MoveResult{GoResult: res, Steps: steps}, nil
 }
 
 // undoTargetLocked walks up to n parent links from HEAD, stopping early at the

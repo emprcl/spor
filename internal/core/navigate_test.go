@@ -12,11 +12,11 @@ func TestUndoRedoRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "A")
-	a := snapshotID(t, eng)
+	a := snapID(t, eng)
 	write(t, root, "f", "B")
-	snapshotID(t, eng)
+	snapID(t, eng)
 	write(t, root, "f", "C")
-	c := snapshotID(t, eng)
+	c := snapID(t, eng)
 
 	// undo 2 lands on A and rewrites the working tree.
 	res, err := eng.Undo(ctx, 2)
@@ -54,11 +54,11 @@ func TestUndoClampsAtRoot(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "A")
-	a := snapshotID(t, eng)
+	a := snapID(t, eng)
 	write(t, root, "f", "B")
-	snapshotID(t, eng)
+	snapID(t, eng)
 	write(t, root, "f", "C")
-	snapshotID(t, eng)
+	snapID(t, eng)
 
 	res, err := eng.Undo(ctx, 100)
 	if err != nil {
@@ -95,7 +95,7 @@ func TestRedoAtTipIsNoOp(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "A")
-	snapshotID(t, eng)
+	snapID(t, eng)
 
 	res, err := eng.Redo(ctx, 1)
 	if err != nil {
@@ -113,9 +113,9 @@ func TestUndoForceSettlesEdit(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "A")
-	a := snapshotID(t, eng)
+	a := snapID(t, eng)
 	write(t, root, "f", "B")
-	b := snapshotID(t, eng)
+	b := snapID(t, eng)
 
 	// Edit without snapshotting, then undo.
 	write(t, root, "f", "uncommitted")
@@ -148,16 +148,16 @@ func TestRedoFollowsMostRecentBranch(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "A")
-	a := snapshotID(t, eng)
+	a := snapID(t, eng)
 	write(t, root, "f", "B")
-	snapshotID(t, eng) // first child of A: B
+	snapID(t, eng) // first child of A: B
 
 	// Undo to A, then create a second child C by editing and snapshotting.
 	if _, err := eng.Undo(ctx, 1); err != nil {
 		t.Fatalf("Undo to A: %v", err)
 	}
 	write(t, root, "f", "C")
-	c := snapshotID(t, eng) // second child of A: C, now the most recently visited
+	c := snapID(t, eng) // second child of A: C, now the most recently visited
 
 	// Undo back to A; redo must pick C (most recently visited child), not B.
 	if _, err := eng.Undo(ctx, 1); err != nil {

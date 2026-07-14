@@ -32,9 +32,9 @@ func TestStatCacheHitAvoidsReading(t *testing.T) {
 
 	write(t, root, "a.txt", "original")
 	write(t, root, "b.txt", "one")
-	first, err := eng.Snapshot(ctx, SnapshotOptions{})
+	first, err := eng.Snap(ctx, SnapOptions{})
 	if err != nil {
-		t.Fatalf("Snapshot #1: %v", err)
+		t.Fatalf("Snap #1: %v", err)
 	}
 
 	aPath := filepath.Join(root, "a.txt")
@@ -44,9 +44,9 @@ func TestStatCacheHitAvoidsReading(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(aPath, 0o644) })
 	write(t, root, "b.txt", "two")
 
-	second, err := eng.Snapshot(ctx, SnapshotOptions{})
+	second, err := eng.Snap(ctx, SnapOptions{})
 	if err != nil {
-		t.Fatalf("Snapshot #2 read the unreadable a.txt instead of hitting the cache: %v", err)
+		t.Fatalf("Snap #2 read the unreadable a.txt instead of hitting the cache: %v", err)
 	}
 	if !second.Created {
 		t.Fatal("second snapshot did not create a state")
@@ -84,8 +84,8 @@ func TestStatCacheRacilyCleanRowIsNotTrusted(t *testing.T) {
 
 	write(t, root, "a.txt", "original")
 	write(t, root, "b.txt", "one")
-	if _, err := eng.Snapshot(ctx, SnapshotOptions{}); err != nil {
-		t.Fatalf("Snapshot #1: %v", err)
+	if _, err := eng.Snap(ctx, SnapOptions{}); err != nil {
+		t.Fatalf("Snap #1: %v", err)
 	}
 
 	// Age the row into raciness (recorded_at <= mtime_ns), then make the file
@@ -102,8 +102,8 @@ func TestStatCacheRacilyCleanRowIsNotTrusted(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(aPath, 0o644) })
 	write(t, root, "b.txt", "two")
 
-	if _, err := eng.Snapshot(ctx, SnapshotOptions{}); err == nil {
-		t.Fatal("Snapshot trusted a racily-clean row; want a read attempt (which fails here)")
+	if _, err := eng.Snap(ctx, SnapOptions{}); err == nil {
+		t.Fatal("Snap trusted a racily-clean row; want a read attempt (which fails here)")
 	}
 }
 
@@ -115,7 +115,7 @@ func TestStatCacheRowsFollowFiles(t *testing.T) {
 
 	write(t, root, "a.txt", "a")
 	write(t, root, "b.txt", "b")
-	if _, err := eng.Snapshot(ctx, SnapshotOptions{}); err != nil {
+	if _, err := eng.Snap(ctx, SnapOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	cache := listCache(t, eng)
@@ -130,7 +130,7 @@ func TestStatCacheRowsFollowFiles(t *testing.T) {
 	if err := os.Remove(filepath.Join(root, "b.txt")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := eng.Snapshot(ctx, SnapshotOptions{}); err != nil {
+	if _, err := eng.Snap(ctx, SnapOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	cache = listCache(t, eng)
@@ -143,7 +143,7 @@ func TestStatCacheRowsFollowFiles(t *testing.T) {
 	if _, err := eng.db.ExecContext(ctx, `DELETE FROM stat_cache`); err != nil {
 		t.Fatal(err)
 	}
-	res, err := eng.Snapshot(ctx, SnapshotOptions{})
+	res, err := eng.Snap(ctx, SnapOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

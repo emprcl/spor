@@ -1,5 +1,5 @@
 // Package core is spor's UI-agnostic engine: it owns the store and the
-// operations (snapshot, and later restore/prune/compact/…). Front-ends (the CLI,
+// operations (snapshot, and later restore/dropfrom/fold/…). Front-ends (the CLI,
 // the watcher, a future TUI) are thin callers. See docs/SPEC.md §8.
 package core
 
@@ -78,7 +78,7 @@ func OpenOrInit(ctx context.Context, start string) (*Engine, error) {
 
 // ErrNotProject is returned when no store is found at or above the starting
 // directory and the operation is not allowed to create one.
-var ErrNotProject = fmt.Errorf("not a spor project (no %s found); run 'spor snapshot' to start one", storageDir)
+var ErrNotProject = fmt.Errorf("not a spor project (no %s found); run 'spor snap' to start one", storageDir)
 
 // OpenExisting opens the store for the tree containing start, discovering the
 // project root by walking up. Unlike OpenOrInit it never creates a store: if none

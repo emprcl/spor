@@ -64,7 +64,7 @@ var (
 // pipe.
 func renderLog(w io.Writer, res core.LogResult) {
 	if len(res.States) == 0 {
-		fmt.Fprintln(w, "No snapshots yet. Run 'spor snapshot' to create one.")
+		fmt.Fprintln(w, "No snaps yet. Run 'spor snap' to create one.")
 		return
 	}
 

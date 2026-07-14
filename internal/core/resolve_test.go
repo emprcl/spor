@@ -16,11 +16,11 @@ func TestResolveHeadAndAncestors(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "1")
-	a := snapshotID(t, eng)
+	a := snapID(t, eng)
 	write(t, root, "f", "2")
-	b := snapshotID(t, eng)
+	b := snapID(t, eng)
 	write(t, root, "f", "3")
-	c := snapshotID(t, eng)
+	c := snapID(t, eng)
 
 	cases := map[string]string{"@": c, "@~0": c, "@~1": b, "@~2": a}
 	for ref, want := range cases {
@@ -45,9 +45,9 @@ func TestResolveLabelBeatsTime(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "1")
-	res, err := eng.Snapshot(ctx, SnapshotOptions{Label: "2h"})
+	res, err := eng.Snap(ctx, SnapOptions{Label: "2h"})
 	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
+		t.Fatalf("Snap: %v", err)
 	}
 
 	got, err := eng.Resolve(ctx, "2h")
@@ -66,7 +66,7 @@ func TestResolveTimeIsNowRelative(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "1")
-	b := snapshotID(t, eng)
+	b := snapID(t, eng)
 
 	if got, err := eng.Resolve(ctx, "0s"); err != nil || got != b {
 		t.Fatalf("Resolve(0s) = %s (err %v), want HEAD %s", got, err, b)
@@ -158,7 +158,7 @@ func TestResolvePrefix(t *testing.T) {
 	ctx := context.Background()
 
 	write(t, root, "f", "1")
-	a := snapshotID(t, eng)
+	a := snapID(t, eng)
 
 	// A full id and a lowercase prefix both resolve.
 	if got, err := eng.Resolve(ctx, a); err != nil || got != a {

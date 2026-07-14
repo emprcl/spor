@@ -11,20 +11,20 @@ import (
 	"github.com/emprcl/spor/internal/core"
 )
 
-// newPruneCmd builds `spor prune <ref>`, which deletes a state and all its
+// newDropfromCmd builds `spor dropfrom <ref>`, which deletes a state and all its
 // descendants (docs/SPEC.md §5, §6). It is destructive, so it confirms first and
 // reports exactly what will be removed.
-func newPruneCmd() *cobra.Command {
+func newDropfromCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "prune <ref>",
+		Use:   "dropfrom <ref>",
 		Short: "Delete a state and all its descendants",
 		Long: "Permanently delete a state and everything below it in the history tree. " +
 			"On a leaf this drops just that state; on the current state after an undo it " +
 			"drops the whole forward branch; on the root it wipes all history. If you are " +
 			"on a state being deleted, HEAD moves to its parent (your working files are " +
 			"re-materialized to match). This cannot be undone.\n\n" +
-			"A <ref> selects the state; see 'spor restore --help' for the forms.",
+			"A <ref> selects the state; see 'spor go --help' for the forms.",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := strings.Join(args, " ")
@@ -39,14 +39,14 @@ func newPruneCmd() *cobra.Command {
 			}
 			defer eng.Close()
 
-			plan, err := eng.PrunePlan(ctx, ref)
+			plan, err := eng.DropfromPlan(ctx, ref)
 			if err != nil {
 				return err
 			}
 
 			out := cmd.OutOrStdout()
 			if !yes {
-				fmt.Fprintf(out, "Pruning %s deletes %d %s.\n",
+				fmt.Fprintf(out, "Dropping from %s deletes %d %s.\n",
 					abbrev(plan.Target), plan.StatesToDelete, plural(plan.StatesToDelete, "state", "states"))
 				if plan.WipesEntireStore {
 					fmt.Fprintln(out, "  This wipes ALL history; your working files are left untouched.")
@@ -54,20 +54,20 @@ func newPruneCmd() *cobra.Command {
 					fmt.Fprintf(out, "  HEAD will move to %s and your working files will change to match.\n", abbrev(plan.HeadTarget))
 				}
 				fmt.Fprintln(out, "  This cannot be undone.")
-				if !promptYesNo(cmd.InOrStdin(), out, "Prune?") {
+				if !promptYesNo(cmd.InOrStdin(), out, "Drop?") {
 					fmt.Fprintln(out, "Aborted; nothing was deleted.")
 					return nil
 				}
 			}
 
-			res, err := eng.Prune(ctx, ref)
+			res, err := eng.Dropfrom(ctx, ref)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "Pruned %d %s.\n", res.Deleted, plural(res.Deleted, "state", "states"))
+			fmt.Fprintf(out, "Dropped %d %s.\n", res.Deleted, plural(res.Deleted, "state", "states"))
 			switch {
 			case res.HeadCleared:
-				fmt.Fprintln(out, "All history is gone; the next snapshot starts a fresh timeline.")
+				fmt.Fprintln(out, "All history is gone; the next snap starts a fresh timeline.")
 			case res.HeadMovedTo != "":
 				fmt.Fprintf(out, "HEAD is now %s.\n", abbrev(res.HeadMovedTo))
 			}

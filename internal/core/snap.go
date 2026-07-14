@@ -18,59 +18,59 @@ import (
 	"github.com/emprcl/spor/internal/walk"
 )
 
-// SnapshotOptions configures a snapshot.
-type SnapshotOptions struct {
+// SnapOptions configures a snapshot.
+type SnapOptions struct {
 	Label string // optional human name for the created state
 }
 
-// SnapshotResult reports the outcome. When Created is false the working tree
+// SnapResult reports the outcome. When Created is false the working tree
 // matched HEAD and no state was recorded (no-op suppression).
-type SnapshotResult struct {
+type SnapResult struct {
 	Created bool
 	StateID string
 }
 
-// Snapshot records the current working tree as a new state, per docs/SPEC.md §4.
+// Snap records the current working tree as a new state, per docs/SPEC.md §4.
 // It walks the tree, stores any new blobs, and, unless the resulting manifest
 // matches HEAD (no-op suppression), creates a state under HEAD and advances
 // HEAD, all under the write lock. Blobs are written before the state is
 // committed, so an incomplete state is never visible.
-func (e *Engine) Snapshot(ctx context.Context, opts SnapshotOptions) (SnapshotResult, error) {
+func (e *Engine) Snap(ctx context.Context, opts SnapOptions) (SnapResult, error) {
 	wl, err := lock.AcquireWrite(ctx, e.writeLockPath())
 	if err != nil {
-		return SnapshotResult{}, err
+		return SnapResult{}, err
 	}
 	defer func() { _ = wl.Release() }()
-	return e.snapshotLocked(ctx, opts)
+	return e.snapLocked(ctx, opts)
 }
 
-// snapshotLocked is Snapshot's body, assuming the caller already holds the write
-// lock. Restore force-settles (docs/SPEC.md §5) by calling this under the single
+// snapLocked is Snap's body, assuming the caller already holds the write
+// lock. Go force-settles (docs/SPEC.md §5) by calling this under the single
 // lock it holds for the whole operation, so the pre-restore snapshot and the
 // materialization can never interleave with another front-end.
-func (e *Engine) snapshotLocked(ctx context.Context, opts SnapshotOptions) (SnapshotResult, error) {
+func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, error) {
 	// Read HEAD up front: it is the parent of any new state, the base for no-op
 	// suppression, and (on Windows) the source of inherited exec bits. The write
 	// lock keeps it stable for the rest of the operation.
 	head, err := e.q.GetHead(ctx)
 	if err != nil {
-		return SnapshotResult{}, fmt.Errorf("reading HEAD: %w", err)
+		return SnapResult{}, fmt.Errorf("reading HEAD: %w", err)
 	}
 
 	// Labels are unique aliases (docs/SPEC.md §2), so reject a taken one up front,
 	// before doing the walk, rather than failing on the insert.
 	if opts.Label != "" {
 		if owner, err := e.labelOwner(ctx, opts.Label); err != nil {
-			return SnapshotResult{}, err
+			return SnapResult{}, err
 		} else if owner != "" {
-			return SnapshotResult{}, fmt.Errorf("label %q is already used by state %s", opts.Label, owner)
+			return SnapResult{}, fmt.Errorf("label %q is already used by state %s", opts.Label, owner)
 		}
 	}
 
 	// Walk → store blobs → build the manifest (in sorted path order).
 	files, err := walk.Walk(e.root)
 	if err != nil {
-		return SnapshotResult{}, err
+		return SnapResult{}, err
 	}
 
 	// The stat cache (docs/SPEC.md §4) elides re-reading unchanged files. A row
@@ -81,7 +81,7 @@ func (e *Engine) snapshotLocked(ctx context.Context, opts SnapshotOptions) (Snap
 	// the affected row is distrusted next time.
 	cacheRows, err := e.q.ListStatCache(ctx)
 	if err != nil {
-		return SnapshotResult{}, fmt.Errorf("reading stat cache: %w", err)
+		return SnapResult{}, fmt.Errorf("reading stat cache: %w", err)
 	}
 	cache := make(map[string]gen.StatCache, len(cacheRows))
 	for _, r := range cacheRows {
@@ -116,7 +116,7 @@ func (e *Engine) snapshotLocked(ctx context.Context, opts SnapshotOptions) (Snap
 		case errors.Is(storeErr, fs.ErrNotExist):
 			// Vanished since the walk (editor atomic saves): recorded as deleted.
 		default:
-			return SnapshotResult{}, fmt.Errorf("storing %s: %w", f.Rel, storeErr)
+			return SnapResult{}, fmt.Errorf("storing %s: %w", f.Rel, storeErr)
 		}
 	}
 	var cacheDeletes []string
@@ -128,7 +128,7 @@ func (e *Engine) snapshotLocked(ctx context.Context, opts SnapshotOptions) (Snap
 	// On platforms that cannot observe the execute bit, inherit it from HEAD so a
 	// snapshot there does not flip inherited bits back off (docs/SPEC.md §4).
 	if err := e.resolveExec(ctx, head, entries); err != nil {
-		return SnapshotResult{}, err
+		return SnapResult{}, err
 	}
 	manifestHash := hashManifest(entries)
 
@@ -136,24 +136,24 @@ func (e *Engine) snapshotLocked(ctx context.Context, opts SnapshotOptions) (Snap
 	if head.Valid {
 		prev, err := e.q.GetStateManifestHash(ctx, head.String)
 		if err != nil {
-			return SnapshotResult{}, fmt.Errorf("reading HEAD manifest: %w", err)
+			return SnapResult{}, fmt.Errorf("reading HEAD manifest: %w", err)
 		}
 		if prev == manifestHash {
 			// Still refresh the cache: a suppressed snapshot may have warmed it
 			// (e.g. the first run over an existing store), and skipping the write
 			// would make every future no-op re-read the whole project.
 			if err := e.updateStatCache(ctx, upserts, cacheDeletes); err != nil {
-				return SnapshotResult{}, err
+				return SnapResult{}, err
 			}
-			return SnapshotResult{Created: false}, nil
+			return SnapResult{Created: false}, nil
 		}
 	}
 
 	id := ulid.Make().String()
 	if err := e.commitState(ctx, id, head, manifestHash, opts.Label, entries, upserts, cacheDeletes); err != nil {
-		return SnapshotResult{}, err
+		return SnapResult{}, err
 	}
-	return SnapshotResult{Created: true, StateID: id}, nil
+	return SnapResult{Created: true, StateID: id}, nil
 }
 
 // applyStatCache writes the pending stat-cache changes through q (which may be

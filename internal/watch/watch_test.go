@@ -25,7 +25,7 @@ func newWatched(t *testing.T) (root string, created *int32, stop func()) {
 
 	created = new(int32)
 	snap := func(ctx context.Context) (bool, string, error) {
-		res, err := eng.Snapshot(ctx, core.SnapshotOptions{})
+		res, err := eng.Snap(ctx, core.SnapOptions{})
 		if err == nil && res.Created {
 			atomic.AddInt32(created, 1)
 		}
@@ -74,9 +74,9 @@ func writeFile(t *testing.T, root, rel, content string) {
 	}
 }
 
-// TestWatcherSnapshotsOnChange checks that editing a tracked file, and creating a
+// TestWatcherSnapsOnChange checks that editing a tracked file, and creating a
 // file in a brand-new subdirectory, each drive a snapshot.
-func TestWatcherSnapshotsOnChange(t *testing.T) {
+func TestWatcherSnapsOnChange(t *testing.T) {
 	root, created, stop := newWatched(t)
 	defer stop()
 
