@@ -1,4 +1,4 @@
-// Package watch turns filesystem activity into snapshots for `spor start`. It is
+// Package watch turns filesystem activity into snapshots for `spor watch`. It is
 // the serial pipeline from docs/SPEC.md §4:
 //
 //	fs events -> "dirty" signal -> debounce timer -> [ snapshot job ] -> single worker

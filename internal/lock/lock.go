@@ -49,11 +49,11 @@ func (w *Write) Release() error {
 }
 
 // ErrWatcherRunning is returned when the watcher lock is already held, meaning a
-// `spor start` is already watching this project.
+// `spor watch` is already watching this project.
 var ErrWatcherRunning = errors.New("a watcher is already running for this project")
 
-// Watcher is the lifetime lock held by `spor start`, so a project has at most one
-// watcher (docs/SPEC.md §8). It is acquired non-blocking: a second `spor start`
+// Watcher is the lifetime lock held by `spor watch`, so a project has at most one
+// watcher (docs/SPEC.md §8). It is acquired non-blocking: a second `spor watch`
 // fails immediately rather than queuing.
 type Watcher struct {
 	fl *flock.Flock

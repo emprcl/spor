@@ -189,7 +189,7 @@ func (e *Engine) watcherLockPath() string {
 }
 
 // AcquireWatcher takes the project's watcher lock without blocking, so a second
-// `spor start` fails immediately (docs/SPEC.md §8). Hold the returned lock for
+// `spor watch` fails immediately (docs/SPEC.md §8). Hold the returned lock for
 // the watcher's lifetime and release it on stop.
 func (e *Engine) AcquireWatcher() (*lock.Watcher, error) {
 	return lock.AcquireWatcher(e.watcherLockPath())

@@ -1,5 +1,5 @@
 // Command spor is an automatic, undo-flavored versioning tool for creative
-// coding workflows. See docs/SPEC.md for the design.
+// workflows. See docs/SPEC.md for the design.
 package main
 
 import (

@@ -19,7 +19,7 @@ Experience:
 
 - States are created by a single **snapshot** operation, triggered either
   manually (`spor snapshot`) or automatically by a watcher that runs while
-  `spor start` is open. Either way the user never writes a commit message or
+  `spor watch` is open. Either way the user never writes a commit message or
   stages anything.
 - Recording happens *while `spor` is running*, in the foreground; closing it
   stops watching. There is no hidden background daemon.
@@ -119,7 +119,7 @@ The store lives in a `.spor/` directory at the project root:
   watcher.lock       advisory watcher lock (§8)
 ```
 
-There is no `init` command: the first `snapshot` (or `spor start`) creates this
+There is no `init` command: the first `snapshot` (or `spor watch`) creates this
 layout implicitly. Commands find the project root by walking up from the
 working directory to the nearest `.spor/`, the way Git finds `.git/`, so
 running from a subdirectory operates on the whole project instead of creating a
@@ -261,7 +261,7 @@ default to non-executable, and setting the bit needs an explicit command
 
 ### The watcher: automatic triggering
 
-While `spor start` runs, a watcher turns filesystem activity into snapshots
+While `spor watch` runs, a watcher turns filesystem activity into snapshots
 through one serial pipeline:
 
 ```
@@ -409,7 +409,7 @@ The command surface is deliberately small and **undo-flavored**, not
 Git-flavored. There is no `commit` (recording is automatic), no `branch`
 (branching is implicit), and no `reset`/`discard` (nothing is ever lost, so
 there is nothing to discard). Anything framed as "working dir vs current state"
-is a dead concept: while `spor start` is watching, snapshots happen within the
+is a dead concept: while `spor watch` is watching, snapshots happen within the
 settle window, so the working tree is continuously kept identical to `@`.
 
 ### Referring to a state: `<ref>`
@@ -449,13 +449,13 @@ well defined even after a restore to an old state.
 
 | Command | Effect |
 |---|---|
-| `spor start` | run the watcher in the foreground with a **live log** of the tree building itself; Ctrl+C stops watching |
+| `spor watch` | run the watcher in the foreground, showing the history **tree** repainting live as states appear (the same view as `spor log`); Ctrl+C stops watching |
 | `spor snapshot [-l <label>]` | create one state now, then exit; the watcher-free, scriptable path |
 | `spor log` | show the timeline as a **tree** (branches visible), newest first, marking `@` |
 | `spor undo [n]` / `spor redo [n]` | step back / forward `n` states (clamped to the history boundary) |
 | `spor restore <ref>` | jump to any state |
 
-`spor start` is, for v1, a live monitor only: it shows states appearing, the
+`spor watch` is, for v1, a live monitor only: it shows states appearing, the
 settle indicator, and where `@` is. A full interactive TUI (navigating and
 driving restore/prune/label from within it) is deferred; until then, mutations
 are one-shot CLI commands.
@@ -572,7 +572,7 @@ front-ends call it:
 
 - **One-shot CLI** (`spor snapshot`, `spor restore`, …): open store, call one
   op, exit.
-- **The watcher** (`spor start`): a foreground process whose debounce timer
+- **The watcher** (`spor watch`): a foreground process whose debounce timer
   calls `snapshot` on settle, alongside the live log. Ctrl+C stops it.
 - **A future TUI**: interactive keys calling the same ops.
 
@@ -596,12 +596,12 @@ Three layers, no process management:
    - **Write lock**, held by the core for the *duration of each mutating
      operation*, so all front-ends serialize; reads never take it (so
      `log`/`diff`/`status` always work). Being per-operation, a one-shot
-     `spor restore` runs *while* `spor start` watches: they serialize, the
+     `spor restore` runs *while* `spor watch` watches: they serialize, the
      restore completes under the lock (force-settle included), and the
      watcher's next settle sees the restored tree as a no-op. Acquired
      blocking with a short timeout.
-   - **Watcher lock**, held by `spor start` for its lifetime, so a project has
-     at most one watcher. Acquired non-blocking, so a second `spor start`
+   - **Watcher lock**, held by `spor watch` for its lifetime, so a project has
+     at most one watcher. Acquired non-blocking, so a second `spor watch`
      fails immediately.
 
 3. **Atomic file replacement** (temp → `fsync` → rename) for blobs, the
@@ -632,7 +632,7 @@ requires a local one.
 Whenever the store is opened, recovery runs first: remove abandoned temp files;
 incomplete state creations are automatically discarded (nothing was committed);
 leftover blobs are orphans; verify basic consistency. Only then does the caller
-(a one-shot command or `spor start`) proceed.
+(a one-shot command or `spor watch`) proceed.
 
 ### Schema versioning
 
