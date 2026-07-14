@@ -29,11 +29,14 @@ func newGoCmd() *cobra.Command {
 		Example: `  # Jump back to how things were 2 hours ago
   spor go 2h ago
 
-  # Jump to a state you named
-  spor go before-refactor
+  # Go back 2 states from where you are
+  spor go @~2
 
-  # Go back 3 states from where you are
-  spor go @~3`,
+  # Jump to a specific state by its id (or a short prefix of it)
+  spor go 01ARZ7
+
+  # Jump to a state you named
+  spor go before-refactor`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := strings.Join(args, " ")
