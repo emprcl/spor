@@ -175,5 +175,74 @@ func (b *blobReader) Close() error {
 	return b.f.Close()
 }
 
+// List returns the hash of every blob in the store, reconstructed from the
+// git-style fanout (a two-char directory plus the remaining filename). It is the
+// disk side of GC's mark-sweep (docs/SPEC.md §8). A store with no blobs directory
+// yet returns no hashes.
+func (s *Store) List() ([]string, error) {
+	fans, err := os.ReadDir(s.dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var hashes []string
+	for _, fan := range fans {
+		if !fan.IsDir() || len(fan.Name()) != 2 {
+			continue
+		}
+		objs, err := os.ReadDir(filepath.Join(s.dir, fan.Name()))
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range objs {
+			if !obj.IsDir() {
+				hashes = append(hashes, fan.Name()+obj.Name())
+			}
+		}
+	}
+	return hashes, nil
+}
+
+// Size returns the on-disk (compressed) size of a blob.
+func (s *Store) Size(hash string) (int64, error) {
+	info, err := os.Stat(s.path(hash))
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
+}
+
+// Remove deletes a blob and best-effort prunes its now-possibly-empty fanout
+// directory. A missing blob is not an error, so GC's sweep is idempotent.
+func (s *Store) Remove(hash string) error {
+	if err := os.Remove(s.path(hash)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	_ = os.Remove(filepath.Dir(s.path(hash))) // only succeeds once the dir is empty
+	return nil
+}
+
+// Verify reports whether a stored blob's decompressed content still hashes to its
+// name. It returns ErrNotFound when the blob is absent; an unreadable or
+// undecodable blob (corruption) is reported as ok == false, not an error, so a
+// caller can treat it as a corrupt object rather than aborting.
+func (s *Store) Verify(hash string) (ok bool, err error) {
+	r, err := s.Open(hash)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, ErrNotFound
+		}
+		return false, err
+	}
+	defer r.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, r); err != nil {
+		return false, nil // undecodable content: corrupt, not a store failure
+	}
+	return hex.EncodeToString(h.Sum(nil)) == hash, nil
+}
+
 // ErrNotFound is returned when a blob is missing from the store.
 var ErrNotFound = errors.New("blob not found")
