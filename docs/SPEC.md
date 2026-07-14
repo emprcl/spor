@@ -395,6 +395,23 @@ Given ancestor `A` and descendant `B`:
 Intermediate snapshots are intentionally lost; only the start boundary
 (`parent(A)`) and final contents (`C`) survive.
 
+### Forget: remove the store entirely
+
+The escape hatch out of "infinite undo": delete the whole `.spor/` store, every
+state and blob, and stop tracking the project. Unlike prune/reroot/compact,
+which edit the tree but keep the store and your files, `forget` operates on the
+store as a whole and leaves nothing behind to reclaim.
+
+1. Refuse if a `spor watch` is running (the watcher lock is held): stop watching
+   first, so nothing races the removal.
+2. Confirm, reporting how much will be destroyed (state count, on-disk size).
+   This is irreversible: there is no GC pass or surviving state to recover from.
+3. Close the database and remove the `.spor/` directory wholesale.
+
+Working files are **never touched**, only `.spor/`. Afterwards the project is
+untracked again, and the next `snapshot` or `spor watch` creates a fresh store
+from scratch (§3, implicit init).
+
 ### Diffs
 
 Not stored. Computed on demand by comparing blobs: a text diff when both are
@@ -504,6 +521,19 @@ one state (the "rewind and delete the last state" case); on a **non-leaf** `@`
 the **root** it wipes all history. `prune` should feel heavy: confirm
 destructive cases and report exactly what will be destroyed.
 
+**Starting over** (destructive, removes the whole store):
+
+| Command | Effect |
+|---|---|
+| `spor forget` | delete the entire `.spor/` store, all history and blobs; working files are left untouched |
+
+`forget` is the escape hatch out of "infinite undo" (§5): it does not edit the
+tree, it removes the store itself, so every state and blob is gone and the
+project is no longer tracked (the next `snapshot` or `spor watch` starts fresh).
+It refuses while a `spor watch` is running, and because it is irreversible it
+confirms and reports how much will be deleted. It never touches your working
+files, only `.spor/`.
+
 **Sync** (optional, see §7):
 
 | Command | Effect |
@@ -567,7 +597,7 @@ corrupted; only the single state being created during a crash may be lost.
 
 There is **no daemon.** All behavior lives in a UI-agnostic **core engine** (a
 Go package) owning the operations (snapshot, restore, apply, prune, reroot,
-compact, gc, diff, log, label, verify), ref resolution, and locking. Three unprivileged
+compact, gc, diff, log, label, verify, forget), ref resolution, and locking. Three unprivileged
 front-ends call it:
 
 - **One-shot CLI** (`spor snapshot`, `spor restore`, …): open store, call one
