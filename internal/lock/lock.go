@@ -78,3 +78,21 @@ func AcquireWatcher(path string) (*Watcher, error) {
 func (w *Watcher) Release() error {
 	return w.fl.Unlock()
 }
+
+// WatcherHeld reports whether the watcher lock at path is currently held (by a
+// running `spor watch`). It probes with a non-blocking TryLock and releases
+// immediately on success, so it never keeps the lock itself. flock associates
+// locks with the open file description, so this is exclusive even against a
+// watcher in the same process.
+func WatcherHeld(path string) (bool, error) {
+	fl := flock.New(path)
+	locked, err := fl.TryLock()
+	if err != nil {
+		return false, err
+	}
+	if locked {
+		_ = fl.Unlock()
+		return false, nil
+	}
+	return true, nil
+}

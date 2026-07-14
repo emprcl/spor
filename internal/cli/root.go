@@ -27,6 +27,8 @@ func Root() *cobra.Command {
 	root.AddCommand(newLabelCmd())
 	root.AddCommand(newUndoCmd())
 	root.AddCommand(newRedoCmd())
+	root.AddCommand(newStatusCmd())
+	root.AddCommand(newForgetCmd())
 
 	return root
 }

@@ -195,6 +195,13 @@ func (e *Engine) AcquireWatcher() (*lock.Watcher, error) {
 	return lock.AcquireWatcher(e.watcherLockPath())
 }
 
+// WatcherRunning reports whether a `spor watch` currently holds the watcher lock
+// for this project. It probes the lock without keeping it, so read commands like
+// status and the forget guard can call it safely.
+func (e *Engine) WatcherRunning() (bool, error) {
+	return lock.WatcherHeld(e.watcherLockPath())
+}
+
 // dsn builds the modernc SQLite connection string with the pragmas spor relies
 // on: WAL journaling, a busy timeout, and enforced foreign keys.
 func dsn(path string) string {
