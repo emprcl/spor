@@ -11,7 +11,7 @@ import (
 )
 
 // newDiffCmd builds `spor diff`, which shows the changes between two states
-// (docs/SPEC.md §5, §6). With one ref it compares that state to the current one
+// (docs/design-spec.md §5, §6). With one ref it compares that state to the current one
 // (`@`); with two it compares them directly. It never diffs the working tree.
 func newDiffCmd() *cobra.Command {
 	return &cobra.Command{

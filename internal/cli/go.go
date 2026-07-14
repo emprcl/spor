@@ -11,7 +11,7 @@ import (
 )
 
 // newGoCmd builds `spor go <ref>`, which jumps the working tree back to
-// a past state (docs/SPEC.md §5, §6). Trailing args are joined into the ref, so
+// a past state (docs/design-spec.md §5, §6). Trailing args are joined into the ref, so
 // `spor go 2h ago` works without quoting.
 func newGoCmd() *cobra.Command {
 	return &cobra.Command{

@@ -19,7 +19,7 @@ type MoveResult struct {
 }
 
 // Undo steps HEAD back n states along @'s ancestor line and materializes the
-// result, staying reversible via redo (docs/SPEC.md §6). It clamps: asking for
+// result, staying reversible via redo (docs/design-spec.md §6). It clamps: asking for
 // more than the history holds simply lands on the root. Like restore it
 // force-settles first, so an uncommitted edit becomes a branch rather than being
 // lost. n < 1 is treated as 1.
@@ -28,7 +28,7 @@ func (e *Engine) Undo(ctx context.Context, n int) (MoveResult, error) {
 }
 
 // Redo steps HEAD forward n states, each step following the most-recently-visited
-// child of the current state as recorded by the HEAD journal (docs/SPEC.md §2,
+// child of the current state as recorded by the HEAD journal (docs/design-spec.md §2,
 // §6). It clamps at a leaf. Because editing after an undo starts a new branch,
 // redo reaches only the branch it last left; other branches are reached via log +
 // restore. n < 1 is treated as 1.

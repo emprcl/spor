@@ -20,7 +20,7 @@ import (
 )
 
 // newWatchCmd builds `spor watch`: the foreground watcher that snapshots the
-// project automatically as it settles (docs/SPEC.md §4, §6). On a terminal it
+// project automatically as it settles (docs/design-spec.md §4, §6). On a terminal it
 // shows the history tree repainting live as states appear, the same view as
 // `spor log`; piped, it falls back to a plain line log. Ctrl+C stops it.
 func newWatchCmd() *cobra.Command {
@@ -70,7 +70,7 @@ func newWatchCmd() *cobra.Command {
 // runWatchLive drives the watcher with a full-screen live view of the history
 // tree. It takes over the alternate screen, repaints the tree on every new
 // state, restores the terminal on exit, and then leaves a final static tree in
-// the scrollback so the session's result persists (docs/SPEC.md §6).
+// the scrollback so the session's result persists (docs/design-spec.md §6).
 func runWatchLive(ctx context.Context, eng *core.Engine, root string, f *os.File) error {
 	v := &liveView{eng: eng, root: root, f: f, profile: colorprofile.Detect(f, os.Environ())}
 	v.enter()
@@ -192,7 +192,7 @@ func (v *liveView) repaint(ctx context.Context) {
 }
 
 // repaintLocked composes and writes one frame: a header, the history tree
-// (tail-anchored to what fits the window so the newest states stay visible), and
+// (trimmed to the top rows that fit, so the newest states stay visible), and
 // a status/error footer. The caller must hold v.mu.
 func (v *liveView) repaintLocked(ctx context.Context) {
 	if v.left {
@@ -304,7 +304,7 @@ func runWatchStream(ctx context.Context, eng *core.Engine, root string, w io.Wri
 
 // logWatch renders one watcher event as a line in the streaming fallback monitor.
 // Only states appearing and errors are shown; settling and no-op ticks are kept
-// silent so the log stays a clean record of what was recorded (docs/SPEC.md §6).
+// silent so the log stays a clean record of what was recorded (docs/design-spec.md §6).
 func logWatch(w io.Writer, ev watch.Event) {
 	ts := styleWatchHint.Render(time.Now().Format("15:04:05"))
 	switch ev.Kind {

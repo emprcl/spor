@@ -13,7 +13,7 @@ import (
 )
 
 // Resolve turns a user-facing <ref> into a concrete, opaque state id. It follows
-// the precedence in docs/SPEC.md §6:
+// the precedence in docs/design-spec.md §6:
 //
 //  1. the @ / @~n sigils (HEAD and its nth ancestor);
 //  2. an exact label match (so a label named "2h" wins over the duration);
@@ -22,9 +22,8 @@ import (
 //  4. a ULID prefix.
 //
 // It is a pure read and takes no lock. Times are a duration back from now in
-// seconds, minutes, hours, or days ("2h ago", "3d"); calendar words like
-// "yesterday" or "friday 3pm" are not parsed yet. Anything not recognized as a
-// time falls through to the ULID-prefix step.
+// seconds, minutes, hours, or days ("2h ago", "3d"); calendar dates are out of
+// scope. Anything not recognized as a time falls through to the ULID-prefix step.
 func (e *Engine) Resolve(ctx context.Context, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
@@ -102,7 +101,7 @@ func resolveLabel(ref string, states []gen.ListStatesRow) (string, bool) {
 	return best.ID, found
 }
 
-// resolveTime rewinds @'s own timeline (docs/SPEC.md §6): it returns the deepest
+// resolveTime rewinds @'s own timeline (docs/design-spec.md §6): it returns the deepest
 // ancestor of @ created at or before t, never some abandoned branch. Creation
 // times strictly increase along any ancestor chain, so this is well defined.
 func resolveTime(t time.Time, head sql.NullString, states []gen.ListStatesRow) (string, error) {

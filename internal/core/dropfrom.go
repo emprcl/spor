@@ -58,7 +58,7 @@ type DropfromResult struct {
 	Reclaimed   GCResult
 }
 
-// Dropfrom deletes a state and its whole subtree (docs/SPEC.md §5). If HEAD is inside
+// Dropfrom deletes a state and its whole subtree (docs/design-spec.md §5). If HEAD is inside
 // the subtree it is first moved to the target's parent and re-materialized
 // (force-settling so an in-flight edit is not lost); pruning the root you are on
 // clears HEAD and leaves the working tree untouched. The subtree is deleted in one

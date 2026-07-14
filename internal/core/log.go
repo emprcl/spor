@@ -23,7 +23,7 @@ type LogResult struct {
 }
 
 // Log returns every state and the current HEAD, for rendering the history tree.
-// It is a pure read: no write lock is taken. See docs/SPEC.md §6.
+// It is a pure read: no write lock is taken. See docs/design-spec.md §6.
 func (e *Engine) Log(ctx context.Context) (LogResult, error) {
 	rows, err := e.q.ListStates(ctx)
 	if err != nil {

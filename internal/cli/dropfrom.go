@@ -12,7 +12,7 @@ import (
 )
 
 // newDropfromCmd builds `spor dropfrom <ref>`, which deletes a state and all its
-// descendants (docs/SPEC.md §5, §6). It is destructive, so it confirms first and
+// descendants (docs/design-spec.md §5, §6). It is destructive, so it confirms first and
 // reports exactly what will be removed.
 func newDropfromCmd() *cobra.Command {
 	var yes bool

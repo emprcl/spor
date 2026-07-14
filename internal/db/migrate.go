@@ -25,7 +25,7 @@ const migrationsDir = "migrations"
 const Dialect = "sqlite3"
 
 // Migrate brings the store's schema up to the version embedded in this binary,
-// gating on version skew (docs/SPEC.md §8, "Schema versioning"):
+// gating on version skew (docs/design-spec.md §8, "Schema versioning"):
 //
 //   - store version <  binary → migrate up (backing up first)
 //   - store version == binary → no-op

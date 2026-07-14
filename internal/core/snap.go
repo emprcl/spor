@@ -30,7 +30,7 @@ type SnapResult struct {
 	StateID string
 }
 
-// Snap records the current working tree as a new state, per docs/SPEC.md §4.
+// Snap records the current working tree as a new state, per docs/design-spec.md §4.
 // It walks the tree, stores any new blobs, and, unless the resulting manifest
 // matches HEAD (no-op suppression), creates a state under HEAD and advances
 // HEAD, all under the write lock. Blobs are written before the state is
@@ -45,7 +45,7 @@ func (e *Engine) Snap(ctx context.Context, opts SnapOptions) (SnapResult, error)
 }
 
 // snapLocked is Snap's body, assuming the caller already holds the write
-// lock. Go force-settles (docs/SPEC.md §5) by calling this under the single
+// lock. Go force-settles (docs/design-spec.md §5) by calling this under the single
 // lock it holds for the whole operation, so the pre-restore snapshot and the
 // materialization can never interleave with another front-end.
 func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, error) {
@@ -57,7 +57,7 @@ func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, 
 		return SnapResult{}, fmt.Errorf("reading HEAD: %w", err)
 	}
 
-	// Labels are unique aliases (docs/SPEC.md §2), so reject a taken one up front,
+	// Labels are unique aliases (docs/design-spec.md §2), so reject a taken one up front,
 	// before doing the walk, rather than failing on the insert.
 	if opts.Label != "" {
 		if owner, err := e.labelOwner(ctx, opts.Label); err != nil {
@@ -73,7 +73,7 @@ func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, 
 		return SnapResult{}, err
 	}
 
-	// The stat cache (docs/SPEC.md §4) elides re-reading unchanged files. A row
+	// The stat cache (docs/design-spec.md §4) elides re-reading unchanged files. A row
 	// is trusted only when size, mtime, and inode all match, the mtime is
 	// strictly older than the row's recording time (the racily-clean rule), and
 	// the blob it names is actually on disk. snapStart is taken before any file
@@ -126,7 +126,7 @@ func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, 
 		}
 	}
 	// On platforms that cannot observe the execute bit, inherit it from HEAD so a
-	// snapshot there does not flip inherited bits back off (docs/SPEC.md §4).
+	// snapshot there does not flip inherited bits back off (docs/design-spec.md §4).
 	if err := e.resolveExec(ctx, head, entries); err != nil {
 		return SnapResult{}, err
 	}
@@ -243,7 +243,7 @@ func (e *Engine) commitState(
 	if err := q.SetHead(ctx, sql.NullString{String: id, Valid: true}); err != nil {
 		return fmt.Errorf("advancing HEAD: %w", err)
 	}
-	// Every HEAD move lands in the journal (docs/SPEC.md §2); it is what lets
+	// Every HEAD move lands in the journal (docs/design-spec.md §2); it is what lets
 	// redo find "the state I just left".
 	if err := q.AppendHeadHistory(ctx, gen.AppendHeadHistoryParams{
 		StateID: id,
@@ -275,7 +275,7 @@ type manifestEntry struct {
 // hashManifest computes the canonical manifest hash: SHA-256 over
 // "path\0hash\0mode\n" for each entry, in the order given (walk returns sorted
 // paths). mode is the execute bit ("1" or "0"), so a bare chmod +x, with no
-// content change, still produces a distinct state. See docs/SPEC.md §2.
+// content change, still produces a distinct state. See docs/design-spec.md §2.
 func hashManifest(entries []manifestEntry) string {
 	h := sha256.New()
 	for _, e := range entries {

@@ -11,7 +11,7 @@ import (
 )
 
 // The styles spor renders every view with. They live in one place so the palette
-// is easy to change (docs/SPEC.md §6), and they are populated once by loadTheme
+// is easy to change (docs/design-spec.md §6), and they are populated once by loadTheme
 // from a background-adaptive palette, so output reads on both light and dark
 // terminals the way the help screen does. Bold is baked into the roles that use it,
 // so the render call sites stay unchanged. Grouped by semantic role:

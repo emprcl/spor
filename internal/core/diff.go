@@ -13,7 +13,7 @@ import (
 
 // Diffs are not stored; they are computed on demand by comparing two states'
 // manifests and blobs: a line diff when both sides are text, a coarse report
-// otherwise (docs/SPEC.md §5). Diff always compares two points in history, never
+// otherwise (docs/design-spec.md §5). Diff always compares two points in history, never
 // the working tree (§6).
 
 const (
@@ -84,7 +84,7 @@ type DiffResult struct {
 }
 
 // Diff computes the changes from state refFrom to state refTo. Both refs are
-// resolved with the usual precedence (docs/SPEC.md §6). It is a pure read and
+// resolved with the usual precedence (docs/design-spec.md §6). It is a pure read and
 // takes no lock. Files are returned sorted by path; unchanged paths are omitted.
 func (e *Engine) Diff(ctx context.Context, refFrom, refTo string) (DiffResult, error) {
 	from, err := e.Resolve(ctx, refFrom)

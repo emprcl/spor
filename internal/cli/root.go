@@ -1,5 +1,5 @@
 // Package cli wires the spor command surface. Commands are thin front-ends over
-// internal/core; see docs/SPEC.md §6 (CLI & UX) and §8 (process model).
+// internal/core; see docs/design-spec.md §6 (CLI & UX) and §8 (process model).
 package cli
 
 import (
@@ -7,7 +7,7 @@ import (
 )
 
 // Command groups for `spor --help`, ordered most-used first and grouped by
-// feature (mirroring docs/SPEC.md §6) instead of the default alphabetical list.
+// feature (mirroring docs/design-spec.md §6) instead of the default alphabetical list.
 const (
 	groupEveryday    = "everyday"
 	groupInspect     = "inspect"

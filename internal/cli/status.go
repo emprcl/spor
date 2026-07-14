@@ -14,7 +14,7 @@ import (
 )
 
 // newStatusCmd builds `spor status`, a quick read of whether a watcher is running
-// and where the current state (@) is (docs/SPEC.md §6).
+// and where the current state (@) is (docs/design-spec.md §6).
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
@@ -48,21 +48,43 @@ func renderStatus(w io.Writer, st core.StatusResult) {
 	row := func(keyStyle lipgloss.Style, key, val string) {
 		fmt.Fprintln(w, keyStyle.Render(key)+strings.Repeat(" ", 9-len(key))+val)
 	}
+	// count renders a number and its unit, the number picked out like a state id.
+	count := func(n int, one, many string) string {
+		return styleID.Render(fmt.Sprintf("%d", n)) + styleStatusKey.Render(" "+plural(n, one, many))
+	}
+
 	row(styleStatusKey, "project", st.Root)
 	if st.WatcherRunning {
 		row(styleStatusKey, "watcher", styleStatusOn.Render("running"))
 	} else {
 		row(styleStatusKey, "watcher", styleStatusKey.Render("not running"))
 	}
+
+	hist := count(st.StateCount, "snap", "snaps")
+	if st.Tips > 0 {
+		hist += styleStatusKey.Render("  ·  ") + count(st.Tips, "timeline", "timelines")
+	}
+	row(styleStatusKey, "history", hist)
+	row(styleStatusKey, "store", styleID.Render(humanBytes(st.StoreBytes)))
+
 	// The @ marker is colored like the current-state marker in `spor log`.
-	if st.HasHead {
-		val := styleID.Render(abbrev(st.Head.ID))
-		if st.Head.Label != "" {
-			val += "  " + styleLabel.Render(st.Head.Label)
-		}
-		val += "  " + styleTime.Render(humanizeSince(st.Head.CreatedAt))
-		row(styleHeadTag, "@", val)
-	} else {
+	if !st.HasHead {
 		row(styleHeadTag, "@", styleStatusKey.Render("no states yet"))
+		return
+	}
+	val := styleID.Render(abbrev(st.Head.ID))
+	if st.Head.Label != "" {
+		val += "  " + styleLabel.Render(st.Head.Label)
+	}
+	val += "  " + styleTime.Render(humanizeSince(st.Head.CreatedAt))
+	row(styleHeadTag, "@", val)
+
+	// A second line places @ within the history: on the tip, or rewound with newer
+	// states ahead that redo/go can move to.
+	if st.Ahead > 0 {
+		row(styleStatusKey, "", count(st.Ahead, "newer snap", "newer snaps")+
+			styleStatusKey.Render(" ahead — redo or go to move forward"))
+	} else {
+		row(styleStatusKey, "", styleStatusKey.Render("at the tip of its timeline"))
 	}
 }

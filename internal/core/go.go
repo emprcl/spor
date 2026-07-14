@@ -28,7 +28,7 @@ type GoResult struct {
 }
 
 // Go materializes a past state into the working tree and points HEAD at it,
-// per docs/SPEC.md §5. It runs entirely under the write lock:
+// per docs/design-spec.md §5. It runs entirely under the write lock:
 //
 //  1. force-settle by snapshotting the current tree, so an in-flight edit is not
 //     lost and restore stays undoable (a no-op if nothing changed);
@@ -49,7 +49,7 @@ func (e *Engine) Go(ctx context.Context, ref string) (GoResult, error) {
 	// Resolve the ref against the current HEAD *before* force-settling, so @~n and
 	// time refs mean what the user saw in the log, not something shifted by the
 	// pre-restore snapshot we are about to take. The result is an opaque, stable
-	// id that survives the snapshot (docs/SPEC.md §5, §6).
+	// id that survives the snapshot (docs/design-spec.md §5, §6).
 	target, err := e.Resolve(ctx, ref)
 	if err != nil {
 		return GoResult{}, err
@@ -60,7 +60,7 @@ func (e *Engine) Go(ctx context.Context, ref string) (GoResult, error) {
 // goToLocked materializes an already-chosen target state into the working
 // tree and moves HEAD to it. The caller must already hold the write lock and
 // must have chosen target before this runs, since the force-settle here mutates
-// history. It is the shared tail of restore, undo, and redo (docs/SPEC.md §5).
+// history. It is the shared tail of restore, undo, and redo (docs/design-spec.md §5).
 func (e *Engine) goToLocked(ctx context.Context, target string) (GoResult, error) {
 	// Step 1: force-settle. A one-shot restore cannot drain another process's
 	// debounce timer, so it snapshots itself.
@@ -119,7 +119,7 @@ func (e *Engine) materializeTo(ctx context.Context, target string) (written, del
 // the current manifest has but the target does not. Because a force-settle ran
 // first, the current manifest exactly matches what is on disk, so a target entry
 // whose path, blob, and execute bit are unchanged is already correct and skipped
-// (keeping restore of a small change cheap; docs/SPEC.md §9).
+// (keeping restore of a small change cheap; docs/design-spec.md §9).
 func (e *Engine) materialize(target, current []gen.ListManifestEntriesRow) (written, deleted int, err error) {
 	onDisk := make(map[string]gen.ListManifestEntriesRow, len(current))
 	for _, ent := range current {
@@ -156,7 +156,7 @@ func (e *Engine) materialize(target, current []gen.ListManifestEntriesRow) (writ
 // writeWorkingFile writes one manifest entry into the working tree from its blob,
 // creating parent directories and applying the stored execute bit. OpenFile does
 // not change an existing file's mode, so a chmod-only change needs the explicit
-// chmod (docs/SPEC.md §4).
+// chmod (docs/design-spec.md §4).
 func (e *Engine) writeWorkingFile(ent gen.ListManifestEntriesRow) error {
 	abs := e.workingPath(ent.Path)
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
@@ -190,7 +190,7 @@ func (e *Engine) writeWorkingFile(ent gen.ListManifestEntriesRow) error {
 }
 
 // setHeadTo moves HEAD to id and appends the move to the journal, in one
-// transaction (docs/SPEC.md §2).
+// transaction (docs/design-spec.md §2).
 func (e *Engine) setHeadTo(ctx context.Context, id string) error {
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {

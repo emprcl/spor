@@ -14,7 +14,7 @@ type GCResult struct {
 }
 
 // GC reclaims blobs no surviving state references, a mark-sweep over the blob
-// store (docs/SPEC.md §8). It takes the write lock like any mutating operation,
+// store (docs/design-spec.md §8). It takes the write lock like any mutating operation,
 // so it cannot race an in-flight snapshot (whose blobs land on disk before its
 // state row commits); every on-disk blob absent from the reachable set is
 // therefore a true orphan. Sweeping only ever deletes blobs, never state rows.
@@ -29,7 +29,7 @@ func (e *Engine) GC(ctx context.Context) (GCResult, error) {
 
 // gcLocked is GC's mark-sweep body, assuming the caller already holds the write
 // lock. Dropfrom, keepfrom, and fold run it after removing states so newly
-// unreferenced blobs are reclaimed in the same locked operation (docs/SPEC.md §8).
+// unreferenced blobs are reclaimed in the same locked operation (docs/design-spec.md §8).
 func (e *Engine) gcLocked(ctx context.Context) (GCResult, error) {
 	referenced, err := e.referencedBlobHashes(ctx)
 	if err != nil {
@@ -60,7 +60,7 @@ func (e *Engine) gcLocked(ctx context.Context) (GCResult, error) {
 
 // referencedBlobHashes is the reachable set: every blob hash named by any state's
 // manifest. A full pass over all states is required before any blob is swept
-// (docs/SPEC.md §8), and it is also what GC marks against.
+// (docs/design-spec.md §8), and it is also what GC marks against.
 func (e *Engine) referencedBlobHashes(ctx context.Context) (map[string]struct{}, error) {
 	states, err := e.q.ListStates(ctx)
 	if err != nil {

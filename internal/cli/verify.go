@@ -11,7 +11,7 @@ import (
 	"github.com/emprcl/spor/internal/core"
 )
 
-// newVerifyCmd builds `spor verify`, the store integrity check (docs/SPEC.md §8).
+// newVerifyCmd builds `spor verify`, the store integrity check (docs/design-spec.md §8).
 // It prints any problems and exits non-zero when the store is not intact.
 func newVerifyCmd() *cobra.Command {
 	return &cobra.Command{

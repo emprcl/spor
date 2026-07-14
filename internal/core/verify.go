@@ -28,7 +28,7 @@ type VerifyResult struct {
 // OK reports whether the store passed with no issues.
 func (r VerifyResult) OK() bool { return len(r.Issues) == 0 }
 
-// Verify checks store integrity (docs/SPEC.md §8): every referenced blob exists
+// Verify checks store integrity (docs/design-spec.md §8): every referenced blob exists
 // and matches its SHA-256; every manifest's stored hash recomputes; every parent
 // and HEAD resolves to a real state; and the parent graph is acyclic. It is a
 // pure read (referenced blobs are never GC'd, so it needs no lock) and collects

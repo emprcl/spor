@@ -1,6 +1,6 @@
 // Package blob is a content-addressed, zstd-compressed object store on disk.
 // Blob identity is SHA-256 over the *plaintext*; compression is a storage detail
-// that never affects the hash. See docs/SPEC.md §3.
+// that never affects the hash. See docs/design-spec.md §3.
 package blob
 
 import (
@@ -18,7 +18,7 @@ import (
 
 // compressionLevel is deliberately low: snapshots sit on the hot path and must
 // feel instant, and zstd decompression is fast regardless of level so restore
-// stays quick. See docs/SPEC.md §3.
+// stays quick. See docs/design-spec.md §3.
 const compressionLevel = zstd.SpeedDefault // level ~3
 
 // Store writes and reads blobs under a single directory.
@@ -38,7 +38,7 @@ func New(dir, tmp string) (*Store, error) {
 }
 
 // path returns the on-disk object path for a blob hash, fanned out git-style
-// under a directory named by the hash's first two hex chars (docs/SPEC.md §3),
+// under a directory named by the hash's first two hex chars (docs/design-spec.md §3),
 // so no single directory accumulates an unbounded number of entries.
 func (s *Store) path(hash string) string {
 	return filepath.Join(s.dir, hash[:2], hash[2:])
@@ -114,7 +114,7 @@ func (s *Store) Put(r io.Reader) (hash string, err error) {
 	}
 	// Persist the rename itself: fsync the fan-out directory, and the store root
 	// too when the fan-out directory is new, before the caller commits a state
-	// that references this blob (docs/SPEC.md §8). No-op on Windows.
+	// that references this blob (docs/design-spec.md §8). No-op on Windows.
 	if err = syncDir(fanDir); err != nil {
 		return "", fmt.Errorf("syncing blob directory %s: %w", fanDir, err)
 	}
@@ -177,7 +177,7 @@ func (b *blobReader) Close() error {
 
 // List returns the hash of every blob in the store, reconstructed from the
 // git-style fanout (a two-char directory plus the remaining filename). It is the
-// disk side of GC's mark-sweep (docs/SPEC.md §8). A store with no blobs directory
+// disk side of GC's mark-sweep (docs/design-spec.md §8). A store with no blobs directory
 // yet returns no hashes.
 func (s *Store) List() ([]string, error) {
 	fans, err := os.ReadDir(s.dir)

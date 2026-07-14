@@ -1,6 +1,6 @@
 # spor
 
-:notebook: **[Specification](docs/SPEC.md)**
+:notebook: **[Design Specification](docs/design-spec.md)**
 
 spor is a versioning tool for creative workflows. It works differently from
 traditional version control like [Git](https://git-scm.com/): instead of manual
@@ -30,5 +30,5 @@ spor snap -l "wip"   # ...with a label
 
 ## Documentation
 
-See the [Specification](docs/SPEC.md) for the full design and the mental model
+See the [Design Specification](docs/design-spec.md) for the full design and the mental model
 behind spor.

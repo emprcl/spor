@@ -12,7 +12,7 @@ import (
 
 // ForgetResult reports what forget would (or did) destroy: the store location,
 // how many states it held, and its on-disk size. Used for the confirmation
-// prompt (docs/SPEC.md §5, §6).
+// prompt (docs/design-spec.md §5, §6).
 type ForgetResult struct {
 	StoreDir   string
 	StateCount int
@@ -33,7 +33,7 @@ func (e *Engine) ForgetStats(ctx context.Context) (ForgetResult, error) {
 	return ForgetResult{StoreDir: e.storeDir, StateCount: len(states), Bytes: size}, nil
 }
 
-// Forget removes the entire store (docs/SPEC.md §5): every state, all history,
+// Forget removes the entire store (docs/design-spec.md §5): every state, all history,
 // and all blobs. Working files are never touched; only the .spor directory is
 // removed. It refuses while a watcher is running, then closes the database and
 // deletes the store. The engine must not be used afterwards (Close is idempotent,

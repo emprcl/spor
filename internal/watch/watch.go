@@ -1,5 +1,5 @@
 // Package watch turns filesystem activity into snapshots for `spor watch`. It is
-// the serial pipeline from docs/SPEC.md §4:
+// the serial pipeline from docs/design-spec.md §4:
 //
 //	fs events -> "dirty" signal -> debounce timer -> [ snapshot job ] -> single worker
 //
@@ -24,7 +24,7 @@ import (
 	"github.com/emprcl/spor/internal/walk"
 )
 
-// Default timing for the debounce pipeline (docs/SPEC.md §4). Settle is the quiet
+// Default timing for the debounce pipeline (docs/design-spec.md §4). Settle is the quiet
 // window: instant-feeling but long enough to outlast an atomic-save burst or a
 // project-wide save-all. MaxWait caps it so a continuous writer still snapshots.
 const (
@@ -169,7 +169,7 @@ func (w *Watcher) handleEvent(ev fsnotify.Event) {
 
 // markDirty signals a change, coalescing: if a signal is already pending the send
 // is dropped, so a burst of events collapses to one (the capacity-1 slot from
-// docs/SPEC.md §4).
+// docs/design-spec.md §4).
 func (w *Watcher) markDirty() {
 	select {
 	case w.dirty <- struct{}{}:

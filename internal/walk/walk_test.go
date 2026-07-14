@@ -121,7 +121,7 @@ func TestWalkRelPathsAreSlashSeparated(t *testing.T) {
 	}
 }
 
-// An unreadable directory is a hard error (docs/SPEC.md §4): fix it or ignore
+// An unreadable directory is a hard error (docs/design-spec.md §4): fix it or ignore
 // it via .sporignore. Only vanished paths are tolerated.
 func TestWalkFailsOnUnreadableDir(t *testing.T) {
 	if os.Geteuid() == 0 {

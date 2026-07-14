@@ -1,5 +1,5 @@
 // Package walk enumerates the tracked files of a project. The filesystem walk,
-// not file events, is spor's source of truth (docs/SPEC.md §4), so callers
+// not file events, is spor's source of truth (docs/design-spec.md §4), so callers
 // rebuild state from whatever Walk returns.
 package walk
 
@@ -24,7 +24,7 @@ type File struct {
 	// inherits the bit from the parent state instead of observing it here.
 	Exec bool
 	// Size, MtimeNs, and Inode identify the file for the stat cache
-	// (docs/SPEC.md §4). Inode is 0 where unavailable (Windows).
+	// (docs/design-spec.md §4). Inode is 0 where unavailable (Windows).
 	Size    int64
 	MtimeNs int64
 	Inode   uint64
@@ -35,7 +35,7 @@ type File struct {
 const StorageDir = ".spor"
 
 // IgnoreFile is the project's optional gitignore-style exclusion list, read from
-// the project root (docs/SPEC.md §4).
+// the project root (docs/design-spec.md §4).
 const IgnoreFile = ".sporignore"
 
 // defaultIgnorePatterns are things spor ignores out of the box: editor temp/swap
@@ -59,7 +59,7 @@ var defaultIgnorePatterns = []byte(`.git/
 // A path that vanishes mid-walk (editor atomic saves do this constantly) is
 // treated as if it never existed; that race is routine under a watcher and
 // never an error. Anything else (permissions, I/O) aborts: fix the file or
-// ignore it via .sporignore. See docs/SPEC.md §4.
+// ignore it via .sporignore. See docs/design-spec.md §4.
 func Walk(root string) ([]File, error) {
 	m := newMatcher(root)
 
@@ -137,7 +137,7 @@ func newMatcher(root string) *gitignore.Matcher {
 
 // Matcher decides whether a project-relative path is ignored, combining the
 // built-in defaults with the project's .sporignore. It lets the watcher reuse
-// exactly the walk's ignore rules (docs/SPEC.md §4) when placing watches and
+// exactly the walk's ignore rules (docs/design-spec.md §4) when placing watches and
 // filtering events. It does not know about the always-excluded .spor directory;
 // callers handle that themselves (via StorageDir), as Walk does.
 type Matcher struct {

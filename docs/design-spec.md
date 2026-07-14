@@ -1,16 +1,20 @@
-# spor: Specification
+# spor: Design Specification
 
-Infinite undo for your whole project. Jump back to any state, or branch off to
-explore. Built for creative workflows.
+`spor` records a project's contents over time and lets the user return to any
+previous state. This document specifies the data model, storage, recording,
+operations, CLI, and runtime design.
+
+Some capabilities described here are not yet built; they are marked
+_(not yet implemented)_ inline, and §10 lists them together.
 
 ---
 
 ## 1. Overview
 
 `spor` records a project's evolution automatically and lets the user return to
-any previous state instantly. It should feel like an **infinite, automatic undo
-history**, not a version control system: no commits, branches, staging, or
-repositories to think about.
+any previous state. The model is an automatic undo history rather than a version
+control system: there are no commits, branches, staging, or repositories to
+manage.
 
 The single abstraction the user works with is an immutable **state**: the
 complete contents of the project at one moment.
@@ -28,8 +32,8 @@ Experience:
   or exposed.
 
 Internally this forms a tree of states, but that is an implementation detail.
-The system favors **simplicity over Git compatibility**, and optimizes for
-**single-user experimentation**, not collaboration.
+The design favors simplicity over Git compatibility and targets single-user use,
+not collaboration.
 
 ---
 
@@ -67,7 +71,7 @@ stored as its own column rather than parsed back out of the ID.
 ### What is tracked
 
 Only **regular files**. Symbolic links, sockets, devices, and other special
-files are skipped (symlink support is deferred). Empty directories are not
+files are skipped (symlink support is _not yet implemented_). Empty directories are not
 represented (a manifest is a map of file paths), and file mtimes are neither
 stored nor restored.
 
@@ -207,7 +211,7 @@ The walk excludes files that should not be versioned, resolved in this order:
 
 Matched directories are pruned wholesale (e.g. `node_modules/`), never walked.
 `.sporignore` is itself tracked, like `.gitignore`, and spor never creates it
-(it is opt-in). Nested per-directory ignore files are out of scope for v1.
+(it is opt-in). Nested per-directory ignore files are out of scope.
 
 ### The stat cache
 
@@ -247,7 +251,7 @@ Any other failure (an unreadable file or directory, an I/O error) aborts the
 snapshot with an error naming the offending path: fix it or exclude it via
 `.sporignore`. Nothing partial is ever recorded. Carrying locked-but-present
 paths over from `HEAD`, which Windows file locking will eventually want, is
-deferred.
+_not yet implemented_.
 
 ### The execute bit
 
@@ -256,8 +260,8 @@ captured like any other change (§2). On platforms that cannot report it
 (Windows), the bit is **inherited from the parent state** instead: observing
 would read every file as non-executable and, because the bit is part of the
 manifest hash, flip inherited scripts off as a spurious state. New files there
-default to non-executable, and setting the bit needs an explicit command
-(deferred). This is the same tradeoff as Git's `core.fileMode`.
+default to non-executable; setting the bit on Windows is out of scope. This is
+the same tradeoff as Git's `core.fileMode`.
 
 ### The watcher: automatic triggering
 
@@ -287,8 +291,8 @@ fs events ──► "dirty" signal ──► debounce timer ──► [ snapshot
   capped snapshot may therefore capture in-progress (torn) files; accepted:
   the next settle records the consistent version, and history keeps both.
 
-Settle window: instant-feeling (~200-500 ms) but long enough to outlast an
-atomic-save burst or a project-wide save-all.
+Settle window: short (~200-500 ms) but long enough to outlast an atomic-save
+burst or a project-wide save-all.
 
 ### Watch mechanics
 
@@ -305,8 +309,8 @@ atomic-save burst or a project-wide save-all.
 
 All operations produce or remove whole states. History editing (dropfrom, keepfrom,
 fold) is **destructive but never rewriting**: it removes states from the tree
-but never alters what a surviving state contains. Both rely on opaque State IDs (no
-ID cascade on re-parent) and on GC (§8) to reclaim now-unreferenced blobs.
+but never alters what a surviving state contains. They all rely on opaque State IDs
+(no ID cascade on re-parent) and on GC (§8) to reclaim now-unreferenced blobs.
 
 ### Go
 
@@ -357,7 +361,7 @@ and reclaims its space while keeping everything from a chosen point forward.
 
 Like dropfrom it is destructive but never rewriting: no surviving state's contents
 change, only `S`'s parent link. Keeping from an existing root is a no-op.
-`keepfrom` should feel heavy: confirm and report exactly what will be destroyed.
+`keepfrom` confirms and reports exactly what will be destroyed.
 
 ### Fold: squash a linear range into one state
 
@@ -374,8 +378,8 @@ Intermediate snapshots are intentionally lost; only the start boundary
 
 ### Forget: remove the store entirely
 
-The escape hatch out of "infinite undo": delete the whole `.spor/` store, every
-state and blob, and stop tracking the project. Unlike dropfrom/keepfrom/fold,
+Delete the whole `.spor/` store, every state and blob, and stop tracking the
+project. Unlike dropfrom/keepfrom/fold,
 which edit the tree but keep the store and your files, `forget` operates on the
 store as a whole and leaves nothing behind to reclaim.
 
@@ -399,8 +403,8 @@ profiling demands.
 
 ## 6. CLI & UX
 
-The command surface is deliberately small and **undo-flavored**, not
-Git-flavored. There is no `commit` (recording is automatic), no `branch`
+The command surface is deliberately small and modeled on undo, not Git. There
+is no `commit` (recording is automatic), no `branch`
 (branching is implicit), and no `reset`/`discard` (nothing is ever lost, so
 there is nothing to discard). Anything framed as "working dir vs current state"
 is a dead concept: while `spor watch` is watching, snapshots happen within the
@@ -414,7 +418,7 @@ settle window, so the working tree is continuously kept identical to `@`.
 | `@~n` | `n` states back along `@`'s ancestor line |
 | `01ARZ7` | short ULID prefix |
 | `mylabel` | a state the user named |
-| `2h ago`, `3d`, `yesterday`, `"friday 3pm"` | a time (the word `ago` is optional) |
+| `2h ago`, `3d` | a duration back from now (the word `ago` is optional) |
 
 Trailing positional args are joined into the ref, so `spor go 2h ago`
 works without quoting. A bare token is resolved in this precedence:
@@ -424,9 +428,8 @@ works without quoting. A bare token is resolved in this precedence:
 3. parses as a **time**
 4. **ULID prefix**
 
-For v1 a time is a duration back from now, in seconds, minutes, hours, or days
-(`s`, `m`, `h`, `d`); calendar phrases like `yesterday` or `"friday 3pm"` are
-deferred and fall through to the ULID-prefix step until a date parser lands.
+A time is a duration back from now, in seconds, minutes, hours, or days
+(`s`, `m`, `h`, `d`). Calendar dates are out of scope.
 
 **Time rewinds `@`'s own timeline**, not the whole tree: a time `T` resolves to
 the deepest ancestor of `@` created at or before `T`, never some abandoned
@@ -443,15 +446,15 @@ well defined even after a restore to an old state.
 
 | Command | Effect |
 |---|---|
-| `spor watch` | run the watcher in the foreground, showing the history **tree** repainting live as states appear (the same view as `spor log`); Ctrl+C stops watching |
+| `spor watch` | run the watcher in the foreground, showing the history repainting live as states appear (the same view as `spor log`); Ctrl+C stops watching |
 | `spor snap [-l <label>]` | create one state now, then exit; the watcher-free, scriptable path |
-| `spor log` | show the timeline as a **tree** (branches visible), newest first, marking `@` |
+| `spor log` | show the history newest-first as **swimlanes**: each branch keeps its own column, and long linear runs are folded to their most recent few; marks `@` |
 | `spor undo [n]` / `spor redo [n]` | step back / forward `n` states (clamped to the history boundary) |
 | `spor go <ref>` | jump to any state |
 
-`spor watch` is, for v1, a live monitor only: it shows states appearing, the
-settle indicator, and where `@` is. A full interactive TUI (navigating and
-driving go/dropfrom/label from within it) is deferred; until then, mutations
+`spor watch` is a live monitor only: it shows states appearing, the settle
+indicator, and where `@` is. A full interactive TUI (navigating and driving
+go/dropfrom/label from within it) is _not yet implemented_; until then, mutations
 are one-shot CLI commands.
 
 `redo` is intentionally simple: it follows the **most-recently-visited child**
@@ -471,7 +474,7 @@ uncommitted edit survives as a branch) and each is itself reversible.
 | `spor label <ref> <name>` | name a state for easy reference (labels are unique); bare `spor label` lists them |
 | `spor diff <ref>` | changes from `<ref>` **to `@`** ("what's changed since then") |
 | `spor diff <a> <b>` | changes between two states |
-| `spor status` | whether a watcher is running and where `@` is |
+| `spor status` | project path, whether a watcher is running, history size (snap and timeline counts), on-disk store size, and where `@` sits (on a tip, or how many newer states are ahead) |
 
 Diff always compares **two points in history**; it never diffs against the
 working tree.
@@ -495,8 +498,8 @@ working tree.
 Because `dropfrom` deletes a whole subtree: on a **leaf** `@` it drops just that
 one state (the "rewind and delete the last state" case); on a **non-leaf** `@`
 (after an undo/go without editing) it drops the entire forward branch; on
-the **root** it wipes all history. `dropfrom` should feel heavy: confirm
-destructive cases and report exactly what will be destroyed.
+the **root** it wipes all history. `dropfrom` confirms destructive cases and
+reports exactly what will be destroyed.
 
 **Starting over** (destructive, removes the whole store):
 
@@ -504,14 +507,14 @@ destructive cases and report exactly what will be destroyed.
 |---|---|
 | `spor forget` | delete the entire `.spor/` store, all history and blobs; working files are left untouched |
 
-`forget` is the escape hatch out of "infinite undo" (§5): it does not edit the
-tree, it removes the store itself, so every state and blob is gone and the
-project is no longer tracked (the next `snap` or `spor watch` starts fresh).
+`forget` removes the store rather than editing the tree (§5): every state and
+blob is gone and the project is no longer tracked (the next `snap` or
+`spor watch` starts fresh).
 It refuses while a `spor watch` is running, and because it is irreversible it
 confirms and reports how much will be deleted. It never touches your working
 files, only `.spor/`.
 
-**Sync** (optional, see §7):
+**Sync** (optional, see §7) — _not yet implemented_:
 
 | Command | Effect |
 |---|---|
@@ -529,6 +532,9 @@ files, only `.spor/`.
 ---
 
 ## 7. Sync
+
+> _Not yet implemented (planned)._ This section describes a future capability;
+> none of the `push` / `pull` / `remote` commands or the server exist yet (§10).
 
 Optional single-user **push/pull** to a server, purely for backup and moving
 history between the same user's machines. **No collaboration**: one author, no
@@ -655,7 +661,7 @@ open, it is compared against the version embedded in the binary:
 
 ### Garbage collection
 
-Part of v1, since dropfrom/fold leave blobs unreferenced (and "infinite undo"
+Part of the core, since dropfrom/fold leave blobs unreferenced (and history
 grows without bound). GC is a **mark-sweep** over blobs reachable from all
 surviving states, run after every dropfrom/fold and available as a command. GC
 takes the write lock like any other mutating operation, so it can never race an
@@ -679,6 +685,39 @@ manifest is well-formed and its stored hash recomputes; every `parent` and
   folded, never silently rewritten.
 - Content-addressed blob storage (whole blobs, not delta chains).
 - Events trigger; the filesystem walk is the source of truth.
-- Instant restoration.
-- Favor simplicity over Git compatibility; optimize for single-user
-  experimentation, not collaboration.
+- Restoration materializes a state directly, without replaying history.
+- Favor simplicity over Git compatibility; target single-user use, not
+  collaboration.
+
+---
+
+## 10. Implementation status
+
+The core is implemented: recording (manual `snap` and the `watch` watcher), the
+stat cache, ignore rules (built-in defaults plus root `.sporignore`), the
+zstd-compressed content-addressed blob store, the state tree and HEAD journal,
+`go` / `undo` / `redo`, `dropfrom` / `keepfrom` / `fold`, `label`, `diff`, `log`
+(newest-first swimlanes with folding), `status`, `verify`, `gc`, `forget`,
+advisory file locking, schema versioning and migrations, and crash-safe write
+ordering for state creation.
+
+The following are described above but **not yet implemented** (planned):
+
+- **Sync** (§6, §7): `push`, `pull`, `remote add`, `remote dropfrom`, and the
+  server. None of it exists yet.
+- **Interactive TUI** (§6, §8): `watch` is a live monitor only; there is no
+  keyboard-driven navigation or in-view mutation.
+- **Symlinks** (§2): only regular files are tracked.
+- **Carrying locked-but-present paths on Windows** (§4).
+- **Full on-open crash recovery** (§8): abandoned temp files are cleared and
+  interrupted state creations are discarded by transaction boundaries, but the
+  broader on-open consistency sweep is not yet in place.
+- **Concurrent readers** (§8): the store currently opens a single SQLite
+  connection; the WAL many-readers path is configured but not yet exercised.
+- **Content-defined chunking** (§3) and **diff caching** (§5): performance
+  upgrades, not yet needed.
+
+Deliberately out of scope (not merely deferred): multi-parent merges, full Unix
+modes / ownership / ACLs / xattrs, multi-user collaboration, calendar date
+parsing, nested per-directory ignore files, and setting the execute bit on
+Windows.

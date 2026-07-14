@@ -14,7 +14,7 @@ import (
 )
 
 // newLogCmd builds `spor log`, which renders the project history as a tree
-// (docs/SPEC.md §6). History is a tree (single parent, no merges), so it draws
+// (docs/design-spec.md §6). History is a tree (single parent, no merges), so it draws
 // cleanly with box-drawing connectors.
 func newLogCmd() *cobra.Command {
 	return &cobra.Command{

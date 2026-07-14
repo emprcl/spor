@@ -64,7 +64,7 @@ type FoldResult struct {
 }
 
 // Fold squashes the linear range from the older state A to the newer state B into
-// a single new state C with B's content and A's parent (docs/SPEC.md §5). Under
+// a single new state C with B's content and A's parent (docs/design-spec.md §5). Under
 // the write lock it:
 //
 //  1. force-settles, so an in-flight edit is not lost (it becomes a child of B,

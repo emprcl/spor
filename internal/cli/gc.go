@@ -10,7 +10,7 @@ import (
 )
 
 // newGCCmd builds `spor gc`, which reclaims storage from blobs no state
-// references (docs/SPEC.md §6, §8). GC is mostly automatic after dropfrom/fold;
+// references (docs/design-spec.md §6, §8). GC is mostly automatic after dropfrom/fold;
 // this runs it on demand.
 func newGCCmd() *cobra.Command {
 	return &cobra.Command{

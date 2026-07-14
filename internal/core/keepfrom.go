@@ -58,7 +58,7 @@ type KeepfromResult struct {
 }
 
 // Keepfrom makes a state the new root, dropping everything not under it: the dual of
-// dropfrom (docs/SPEC.md §5). It force-settles first; if HEAD is on a dropped branch
+// dropfrom (docs/design-spec.md §5). It force-settles first; if HEAD is on a dropped branch
 // it is relocated to the new root and re-materialized. The new root's parent link
 // is cleared and every non-survivor is deleted in one transaction, children before
 // parents, then a GC sweep reclaims unreferenced blobs, all under the write lock.

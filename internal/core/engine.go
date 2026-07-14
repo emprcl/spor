@@ -1,6 +1,6 @@
 // Package core is spor's UI-agnostic engine: it owns the store and the
 // operations (snapshot, and later restore/dropfrom/fold/…). Front-ends (the CLI,
-// the watcher, a future TUI) are thin callers. See docs/SPEC.md §8.
+// the watcher, a future TUI) are thin callers. See docs/design-spec.md §8.
 package core
 
 import (
@@ -35,7 +35,7 @@ type Engine struct {
 
 // Discover walks up from start looking for an existing project store (a .spor
 // directory), mirroring how Git finds .git. It returns the project root (the
-// directory containing .spor) and whether one was found. See docs/SPEC.md §8.
+// directory containing .spor) and whether one was found. See docs/design-spec.md §8.
 func Discover(start string) (root string, found bool, err error) {
 	dir, err := filepath.Abs(start)
 	if err != nil {
@@ -58,7 +58,7 @@ func Discover(start string) (root string, found bool, err error) {
 // a store exists at or above start it is used (so running from a subdirectory
 // finds the real root). Otherwise a new store is created in start (implicit
 // init), unless the guard refuses it. This is the entry point for operations
-// that may create a store, such as snapshot. See docs/SPEC.md §8.
+// that may create a store, such as snapshot. See docs/design-spec.md §8.
 func OpenOrInit(ctx context.Context, start string) (*Engine, error) {
 	root, found, err := Discover(start)
 	if err != nil {
@@ -83,7 +83,7 @@ var ErrNotProject = fmt.Errorf("not a spor project (no %s found); run 'spor snap
 // OpenExisting opens the store for the tree containing start, discovering the
 // project root by walking up. Unlike OpenOrInit it never creates a store: if none
 // is found it returns ErrNotProject. This is the entry point for read commands
-// such as log. See docs/SPEC.md §8.
+// such as log. See docs/design-spec.md §8.
 func OpenExisting(ctx context.Context, start string) (*Engine, error) {
 	root, found, err := Discover(start)
 	if err != nil {
@@ -118,7 +118,7 @@ func guardImplicitInit(dir string) error {
 // openAt prepares the store rooted at root: it creates the .spor layout, opens
 // SQLite (WAL + pragmas), runs the schema-version gate and migrations, and clears
 // stale temp files (crash-recovery stub). root is used as-is; discovery and the
-// init guard are handled by the callers above. See docs/SPEC.md §3, §8.
+// init guard are handled by the callers above. See docs/design-spec.md §3, §8.
 func openAt(ctx context.Context, root string) (*Engine, error) {
 	storeDir := filepath.Join(root, storageDir)
 	blobsDir := filepath.Join(storeDir, "blobs")
@@ -132,7 +132,7 @@ func openAt(ctx context.Context, root string) (*Engine, error) {
 	}
 
 	// Crash-recovery stub: discard any temp files left by an interrupted write.
-	// Full recovery lands with the watcher (docs/SPEC.md §8).
+	// Full recovery lands with the watcher (docs/design-spec.md §8).
 	if err := clearDir(tmpDir); err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func (e *Engine) watcherLockPath() string {
 }
 
 // AcquireWatcher takes the project's watcher lock without blocking, so a second
-// `spor watch` fails immediately (docs/SPEC.md §8). Hold the returned lock for
+// `spor watch` fails immediately (docs/design-spec.md §8). Hold the returned lock for
 // the watcher's lifetime and release it on stop.
 func (e *Engine) AcquireWatcher() (*lock.Watcher, error) {
 	return lock.AcquireWatcher(e.watcherLockPath())

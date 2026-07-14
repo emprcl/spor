@@ -13,7 +13,7 @@ import (
 // bit as false and, because it is folded into the manifest hash, flip inherited
 // executable files back off as a spurious new state. Files absent from the parent
 // (new paths) keep their observed value, which is false, so the bit can only be
-// set through an explicit future command. See docs/SPEC.md §4.
+// set through an explicit future command. See docs/design-spec.md §4.
 func (e *Engine) resolveExec(ctx context.Context, parent sql.NullString, entries []manifestEntry) error {
 	if !parent.Valid {
 		return nil // first snapshot: nothing to inherit

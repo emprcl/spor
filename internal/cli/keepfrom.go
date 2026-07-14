@@ -11,7 +11,7 @@ import (
 )
 
 // newKeepfromCmd builds `spor keepfrom <ref>`, the dual of dropfrom: it keeps only
-// the target and its descendants, dropping everything else (docs/SPEC.md §5, §6).
+// the target and its descendants, dropping everything else (docs/design-spec.md §5, §6).
 // It is destructive, so it confirms first and reports exactly what will be dropped.
 func newKeepfromCmd() *cobra.Command {
 	var yes bool

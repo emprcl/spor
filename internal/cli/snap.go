@@ -10,7 +10,7 @@ import (
 )
 
 // newSnapCmd builds `spor snap`, the manual, watcher-free way to record
-// a state (docs/SPEC.md §4, §6).
+// a state (docs/design-spec.md §4, §6).
 func newSnapCmd() *cobra.Command {
 	var label string
 

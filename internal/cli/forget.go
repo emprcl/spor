@@ -14,7 +14,7 @@ import (
 )
 
 // newForgetCmd builds `spor forget`, the escape hatch out of "infinite undo": it
-// deletes the entire .spor store, keeping the working files (docs/SPEC.md §5,
+// deletes the entire .spor store, keeping the working files (docs/design-spec.md §5,
 // §6). It refuses while a watcher runs and confirms before deleting.
 func newForgetCmd() *cobra.Command {
 	var yes bool

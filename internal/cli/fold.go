@@ -11,7 +11,7 @@ import (
 
 // newFoldCmd builds `spor fold <a> <b>`, which squashes the linear range from the
 // older state a to the newer state b into a single state holding b's content
-// (docs/SPEC.md §5, §6). The intermediates are lost, so it confirms first.
+// (docs/design-spec.md §5, §6). The intermediates are lost, so it confirms first.
 func newFoldCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{

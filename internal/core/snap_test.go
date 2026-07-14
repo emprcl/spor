@@ -196,7 +196,7 @@ func requirePermissionChecks(t *testing.T) {
 }
 
 // An unreadable file is a hard error naming the file: fix it or .sporignore it
-// (docs/SPEC.md §4). Only vanished files are tolerated.
+// (docs/design-spec.md §4). Only vanished files are tolerated.
 func TestSnapUnreadableFileFails(t *testing.T) {
 	requirePermissionChecks(t)
 	eng, root := newTestEngine(t)

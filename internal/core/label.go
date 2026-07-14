@@ -42,7 +42,7 @@ func (e *Engine) ListLabels(ctx context.Context) ([]LabelInfo, error) {
 	return labels, nil
 }
 
-// Label gives the state named by ref a human-readable name (docs/SPEC.md §6). A
+// Label gives the state named by ref a human-readable name (docs/design-spec.md §6). A
 // label is mutable metadata, part of no hash, so relabeling never creates or
 // alters a state; it just overwrites the name. Reusing a name across states is
 // allowed (ref resolution takes the most recent). It runs under the write lock
@@ -82,7 +82,7 @@ func (e *Engine) Label(ctx context.Context, ref, name string) (LabelResult, erro
 }
 
 // labelOwner returns the id of the state currently holding name, or "" if the
-// name is free. Labels are unique (docs/SPEC.md §2), so there is at most one.
+// name is free. Labels are unique (docs/design-spec.md §2), so there is at most one.
 func (e *Engine) labelOwner(ctx context.Context, name string) (string, error) {
 	id, err := e.q.GetStateIDByLabel(ctx, sql.NullString{String: name, Valid: true})
 	switch {

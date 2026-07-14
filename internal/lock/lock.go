@@ -1,4 +1,4 @@
-// Package lock provides spor's advisory file locks (docs/SPEC.md §8). Locks use
+// Package lock provides spor's advisory file locks (docs/design-spec.md §8). Locks use
 // flock(2) via gofrs/flock, so the kernel releases them on process exit -
 // including a crash, leaving no stale locks to clean up.
 package lock
@@ -21,7 +21,7 @@ var ErrBusy = errors.New("another spor operation is in progress")
 const writeTimeout = 10 * time.Second
 
 // Write is the per-operation exclusive lock serializing all mutating operations
-// across front-ends (docs/SPEC.md §8). Reads never take it.
+// across front-ends (docs/design-spec.md §8). Reads never take it.
 type Write struct {
 	fl *flock.Flock
 }
@@ -53,7 +53,7 @@ func (w *Write) Release() error {
 var ErrWatcherRunning = errors.New("a watcher is already running for this project")
 
 // Watcher is the lifetime lock held by `spor watch`, so a project has at most one
-// watcher (docs/SPEC.md §8). It is acquired non-blocking: a second `spor watch`
+// watcher (docs/design-spec.md §8). It is acquired non-blocking: a second `spor watch`
 // fails immediately rather than queuing.
 type Watcher struct {
 	fl *flock.Flock
