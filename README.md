@@ -15,9 +15,7 @@ It works differently from traditional version control like
 branches to manage. Instead, Spor watches your project and automatically saves a
 snapshot every time something changes. You can jump back to any past moment, pick
 up from there, and go a different way: think of it as infinite undo for your
-whole project.Spor is a versioning tool for exploratory work, when you're trying things out,
-backtracking, and changing direction without a plan mapped out in advance, and 
-you don't want to lose where you've been.
+whole project.
 
 Everything is automatic and local. Spor records your history as an immutable
 graph of snapshots as you work, storing each unique file once (deduplicated and
