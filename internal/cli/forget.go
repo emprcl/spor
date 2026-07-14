@@ -20,11 +20,13 @@ func newForgetCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "forget",
-		Short: "Delete the entire spor store for this project",
-		Long: "Permanently remove the .spor store: every state, all history, and all " +
-			"blobs. Your working files are left untouched. This cannot be undone. " +
-			"Afterwards the project is no longer tracked, and the next snap or " +
-			"'spor watch' starts a fresh store.",
+		Short: "Delete all of spor's history for this project",
+		Long: "Permanently remove the .spor store: every state and all history. Your " +
+			"actual project files are left untouched. This cannot be undone. Afterwards " +
+			"the project is no longer tracked, and the next 'spor snap' or 'spor watch' " +
+			"starts fresh.",
+		Example: `  # Delete spor's history for this project (your files are kept)
+  spor forget`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := os.Getwd()

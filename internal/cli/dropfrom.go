@@ -18,13 +18,21 @@ func newDropfromCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "dropfrom <ref>",
-		Short: "Delete a state and all its descendants",
-		Long: "Permanently delete a state and everything below it in the history tree. " +
-			"On a leaf this drops just that state; on the current state after an undo it " +
-			"drops the whole forward branch; on the root it wipes all history. If you are " +
-			"on a state being deleted, HEAD moves to its parent (your working files are " +
-			"re-materialized to match). This cannot be undone.\n\n" +
+		Short: "Delete a state and everything after it",
+		Long: "Permanently delete a state and everything that came after it. On the " +
+			"newest state this drops just that one; after an undo it drops the whole " +
+			"forward branch; on the very first state it wipes all history. If you are " +
+			"on a state being deleted, you move to the one before it and your files " +
+			"change to match. This cannot be undone.\n\n" +
 			"A <ref> selects the state; see 'spor go --help' for the forms.",
+		Example: `  # Delete the current state and everything after it
+  spor dropfrom @
+
+  # Delete a branch by its id
+  spor dropfrom 01ARZ7
+
+  # Skip the confirmation prompt
+  spor dropfrom @ -y`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := strings.Join(args, " ")

@@ -17,8 +17,13 @@ func newUndoCmd() *cobra.Command {
 		Use:   "undo [n]",
 		Short: "Step back to an earlier state",
 		Long: "Move back n states (default 1) along the current line of history and " +
-			"restore that state. Undo is reversible with redo. If you ask for more " +
-			"steps than exist, it stops at the oldest state.",
+			"restore your files to match. Undo is reversible with redo. If you ask for " +
+			"more steps than exist, it stops at the oldest state.",
+		Example: `  # Step back one state
+  spor undo
+
+  # Step back five states
+  spor undo 5`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			n, err := parseSteps(args)
@@ -40,6 +45,11 @@ func newRedoCmd() *cobra.Command {
 		Long: "Move forward n states (default 1), following the branch you most " +
 			"recently left. If you ask for more steps than exist, it stops at the " +
 			"newest state. Other branches are reached with 'log' and 'go'.",
+		Example: `  # Step forward one state
+  spor redo
+
+  # Step forward three states
+  spor redo 3`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			n, err := parseSteps(args)

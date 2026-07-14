@@ -18,8 +18,14 @@ import (
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "Show whether a watcher is running and where @ is",
-		Args:  cobra.NoArgs,
+		Short: "Show a summary of the project and where you are",
+		Long: "A quick overview: the project path, whether a watcher is running, how " +
+			"large the history is (snapshots and branches), how much disk the store " +
+			"uses, and where the current state (@) sits, whether you are on the latest " +
+			"or have rewound with newer states still ahead.",
+		Example: `  # Show where you are and how large the history is
+  spor status`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := os.Getwd()
 			if err != nil {

@@ -22,7 +22,15 @@ func newLabelCmd() *cobra.Command {
 		Long: "With no arguments, list every label and the state it names. With a " +
 			"<ref> and a <name>, name that state so you can refer to it by name " +
 			"anywhere a <ref> is accepted. A label is a unique alias, like a state " +
-			"id: relabeling never changes history.",
+			"id: naming a state never changes your history.",
+		Example: `  # Name the current state
+  spor label @ v1.0
+
+  # Name the state from 2 hours ago
+  spor label "2h ago" milestone
+
+  # List all labels
+  spor label`,
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 || len(args) == 2 {
 				return nil

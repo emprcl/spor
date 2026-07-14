@@ -17,15 +17,23 @@ func newGoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "go <ref>",
 		Short: "Jump the project back to a past state",
-		Long: "Materialize a past state into the working directory. Any uncommitted " +
-			"changes are recorded as their own state first, so the jump is always " +
-			"undoable.\n\n" +
-			"A <ref> selects the state to go to:\n" +
+		Long: "Restore your project files to exactly how they were at an earlier state. " +
+			"Any changes you had not snapshotted yet are recorded first, so a jump is " +
+			"always reversible, nothing is lost.\n\n" +
+			"A <ref> picks the state to go to:\n" +
 			"  @~n          n states back from the current one\n" +
-			"  <label>      a state named with 'snap -l' or 'label'\n" +
+			"  <label>      a state you named with 'snap -l' or 'label'\n" +
 			"  <time>       how long ago, e.g. \"2h ago\" or \"3d\"\n" +
 			"               (units: s, m, h, d; the word \"ago\" is optional)\n" +
 			"  <id>         a state id, or just its first few characters",
+		Example: `  # Jump back to how things were 2 hours ago
+  spor go 2h ago
+
+  # Jump to a state you named
+  spor go before-refactor
+
+  # Go back 3 states from where you are
+  spor go @~3`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := strings.Join(args, " ")

@@ -16,8 +16,13 @@ import (
 func newVerifyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "verify",
-		Short: "Check the store's integrity",
-		Args:  cobra.NoArgs,
+		Short: "Check the stored history for corruption",
+		Long: "Check the store's integrity: that every state's files are present and " +
+			"intact, and that the history itself is well-formed. Reports any problems " +
+			"and exits non-zero if the store is not intact.",
+		Example: `  # Check the store for corruption
+  spor verify`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := os.Getwd()
 			if err != nil {

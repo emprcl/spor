@@ -15,8 +15,14 @@ import (
 func newGCCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "gc",
-		Short: "Reclaim storage from unreferenced blobs",
-		Args:  cobra.NoArgs,
+		Short: "Reclaim disk space from unreferenced data",
+		Long: "Reclaim disk space held by file contents that no state references " +
+			"anymore, left behind after dropfrom or fold. This runs automatically after " +
+			"those commands; run it by hand to reclaim space at any time. It never " +
+			"removes anything a surviving state still needs.",
+		Example: `  # Reclaim disk space from data no longer referenced
+  spor gc`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := os.Getwd()
 			if err != nil {

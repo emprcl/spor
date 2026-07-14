@@ -17,14 +17,16 @@ func newKeepfromCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "keepfrom <ref>",
-		Short: "Make a state the new root, dropping the rest",
-		Long: "Keep a state and everything below it, and permanently drop everything " +
-			"else: the state's ancestors and any side branches. This is how a long " +
-			"project forgets old history and reclaims space while keeping everything " +
-			"from a chosen point forward. If you are on a branch being dropped, HEAD " +
-			"moves to the new root (your working files are re-materialized to match). " +
-			"This cannot be undone.\n\n" +
+		Short: "Keep a state and what follows, drop everything before it",
+		Long: "Keep a state and everything after it, and permanently drop everything " +
+			"before: its history and any side branches. This is how a long-running " +
+			"project forgets old history and reclaims disk space while keeping " +
+			"everything from a chosen point forward. If you are on a state being " +
+			"dropped, you move to the kept state and your files change to match. This " +
+			"cannot be undone.\n\n" +
 			"A <ref> selects the state; see 'spor go --help' for the forms.",
+		Example: `  # Forget everything before v1.0, keeping it and all later work
+  spor keepfrom v1.0`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ref := strings.Join(args, " ")

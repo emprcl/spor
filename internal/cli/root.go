@@ -26,10 +26,20 @@ func Root() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "spor",
 		Short: "Infinite undo for your whole project",
-		Long: "spor saves a snapshot of your project every time it changes, so you " +
-			"can jump back to any past state, or branch off to explore a different " +
-			"path, all with one command. Built for creative workflows: no commits, " +
-			"no staging, no version-control ceremony.",
+		Long: "spor saves a snapshot of your project every time it changes, so you can " +
+			"jump back to any earlier state, or branch off to try something different, " +
+			"all with one command. There is nothing to commit and nothing to stage: it " +
+			"just records as you work. Each saved snapshot is called a state, and the " +
+			"one you are currently on is written @.",
+		Example: `  # Save a snapshot of the current state
+  spor snap
+
+  # Watch the project and snapshot automatically as you work
+  spor watch
+
+  # See the history, then jump back to how things were 2 hours ago
+  spor log
+  spor go 2h ago`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Detect the terminal background and build the palette once, before any

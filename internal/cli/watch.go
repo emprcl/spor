@@ -27,9 +27,11 @@ func newWatchCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "watch",
 		Short: "Watch the project and snapshot it automatically",
-		Long: "Run in the foreground, recording a new state every time the project " +
-			"settles after a change. The history tree is shown live, repainting as " +
-			"states appear. Press Ctrl+C to stop watching.",
+		Long: "Run in the foreground and record a new state every time the project " +
+			"settles after a change, so you never have to snapshot by hand. The history " +
+			"is shown live, updating as states appear. Press Ctrl+C to stop watching.",
+		Example: `  # Watch and snapshot automatically until you press Ctrl+C
+  spor watch`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cwd, err := os.Getwd()

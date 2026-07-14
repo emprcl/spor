@@ -19,8 +19,16 @@ import (
 func newLogCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "log",
-		Short: "Show the project history as a tree",
-		Args:  cobra.NoArgs,
+		Short: "Show the project history",
+		Long: "Show the history newest first. Each branch keeps its own column, and long " +
+			"unbranched stretches are folded down to their most recent few. The state " +
+			"you are on is marked (@).",
+		Example: `  # Show the history
+  spor log
+
+  # Page it or search it like any other output
+  spor log | less`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := os.Getwd()
 			if err != nil {

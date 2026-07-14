@@ -16,14 +16,19 @@ func newFoldCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "fold <a> <b>",
-		Short: "Squash a linear range of states into one",
+		Short: "Squash a run of states into one",
 		Long: "Collapse the history from an older state (a) up to a newer one (b) into a " +
-			"single state that keeps b's content. The states in between are permanently " +
-			"lost; only the boundary before a and b's final content survive. The range " +
-			"must be linear: no state in it may have a branch off to the side. This " +
-			"cannot be undone.\n\n" +
+			"single state that keeps b's contents. The states in between are permanently " +
+			"lost; only the point before a and b's final contents survive. The range " +
+			"must be a straight line: no state in it may have a branch off to the side. " +
+			"This cannot be undone.\n\n" +
 			"a and b are state refs; a multi-word time ref must be quoted, e.g. " +
 			"spor fold \"2h ago\" @.",
+		Example: `  # Squash the last five states into one
+  spor fold @~5 @
+
+  # Squash everything between two named states
+  spor fold v1.0 v2.0`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := os.Getwd()

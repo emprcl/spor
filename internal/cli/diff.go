@@ -16,12 +16,17 @@ import (
 func newDiffCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "diff <ref> [<ref>]",
-		Short: "Show changes between two states",
+		Short: "Show what changed between two states",
 		Long: "Compare two points in history. With one <ref>, show what changed from " +
 			"that state to the current one (@). With two, compare the first to the " +
 			"second.\n\n" +
-			"diff never compares against the working tree, only recorded states. A " +
+			"diff only ever compares recorded states, never your uncommitted edits. A " +
 			"multi-word time ref must be quoted, e.g. spor diff \"2h ago\".",
+		Example: `  # What changed since 2 hours ago
+  spor diff "2h ago"
+
+  # Compare two named states
+  spor diff v1.0 v2.0`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			from, to := args[0], "@"

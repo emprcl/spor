@@ -17,8 +17,14 @@ func newSnapCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snap",
 		Short: "Record the current project state now",
-		Long: "Walk the project in the current directory and record it as a new state. " +
-			"If nothing changed since the last state, nothing is recorded.",
+		Long: "Record the current contents of your project as a new state you can jump " +
+			"back to later. If nothing has changed since the last one, nothing is " +
+			"recorded. This is the manual alternative to leaving 'spor watch' running.",
+		Example: `  # Record the current state
+  spor snap
+
+  # Record it with a name you can jump back to
+  spor snap -l "before refactor"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := os.Getwd()
