@@ -6,7 +6,9 @@ Spor is a versioning tool for exploratory work, for when you're trying things ou
 backtracking, and changing direction without a plan mapped out in advance, and 
 you don't want to lose where you've been.
 
-<img src="/docs/screenshot.png" width="50%">
+<p align="center">
+  <img src="/docs/screenshot.png" width="50%">
+</p>
 
 It works differently from traditional version control like
 [Git](https://git-scm.com/). There are no commits to write, nothing to stage, no
