@@ -21,7 +21,7 @@ func newLogCmd() *cobra.Command {
 		Use:   "log",
 		Short: "Show the project history",
 		Long: "Show the history newest first. Each branch keeps its own column, and long " +
-			"unbranched stretches are folded down to their most recent few. The state " +
+			"unbranched stretches are folded down to their most recent few. The snapshot " +
 			"you are on is marked (@).",
 		Example: `  # Show the history
   spor log
@@ -60,7 +60,7 @@ func newLogCmd() *cobra.Command {
 // under test or a pipe.
 func renderLog(w io.Writer, res core.LogResult) {
 	if len(res.States) == 0 {
-		fmt.Fprintln(w, "No snaps yet. Run 'spor snap' to create one.")
+		fmt.Fprintln(w, "No snapshots yet. Run 'spor snap' to create one.")
 		return
 	}
 
@@ -262,7 +262,7 @@ func foldRuns(lines []graphLine) []graphLine {
 			folded := run - foldMax
 			out = append(out, graphLine{
 				graph: drawFold(lines[i].col),
-				meta:  styleTime.Render(fmt.Sprintf("%d %s folded", folded, plural(folded, "snap", "snaps"))),
+				meta:  styleTime.Render(fmt.Sprintf("%d %s folded", folded, plural(folded, "snapshot", "snapshots"))),
 			})
 		} else {
 			out = append(out, lines[i:j]...)

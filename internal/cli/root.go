@@ -27,10 +27,10 @@ func Root() *cobra.Command {
 		Use:   "spor",
 		Short: "Infinite undo for your whole project",
 		Long: "spor saves a snapshot of your project every time it changes, so you can " +
-			"jump back to any earlier state, or branch off to try something different, " +
+			"jump back to any earlier snapshot, or branch off to try something different, " +
 			"all with one command. There is nothing to commit and nothing to stage: it " +
-			"just records as you work. Each saved snapshot is called a state, and the " +
-			"one you are currently on is written @.",
+			"just records as you work. Each save is called a snapshot, and the one you " +
+			"are currently on is written @.",
 		Example: `  # Save a snapshot of the current state
   spor snap
 

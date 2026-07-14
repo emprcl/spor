@@ -102,7 +102,7 @@ func TestRenderLogFoldsLongRun(t *testing.T) {
 			t.Errorf("expected state %c to be folded away:\n%s", c, out)
 		}
 	}
-	if !strings.Contains(out, "3 snaps folded") {
+	if !strings.Contains(out, "3 snapshots folded") {
 		t.Errorf("expected a fold summary of 3 snaps:\n%s", out)
 	}
 }
@@ -122,7 +122,7 @@ func TestRenderLogNoFoldWhenShort(t *testing.T) {
 }
 
 func TestRenderLogEmpty(t *testing.T) {
-	if out := renderPlain(core.LogResult{}); !strings.Contains(out, "No snaps yet") {
+	if out := renderPlain(core.LogResult{}); !strings.Contains(out, "No snapshots yet") {
 		t.Fatalf("empty log = %q", out)
 	}
 }

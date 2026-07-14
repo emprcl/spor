@@ -16,16 +16,16 @@ import (
 func newGoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "go <ref>",
-		Short: "Jump the project back to a past state",
-		Long: "Restore your project files to exactly how they were at an earlier state. " +
+		Short: "Jump the project back to a past snapshot",
+		Long: "Restore your project files to exactly how they were at an earlier snapshot. " +
 			"Any changes you had not snapshotted yet are recorded first, so a jump is " +
 			"always reversible, nothing is lost.\n\n" +
-			"A <ref> picks the state to go to:\n" +
-			"  @~n          n states back from the current one\n" +
-			"  <label>      a state you named with 'snap -l' or 'label'\n" +
+			"A <ref> picks the snapshot to go to:\n" +
+			"  @~n          n snapshots back from the current one\n" +
+			"  <label>      a snapshot you named with 'snap -l' or 'label'\n" +
 			"  <time>       how long ago, e.g. \"2h ago\" or \"3d\"\n" +
 			"               (units: s, m, h, d; the word \"ago\" is optional)\n" +
-			"  <id>         a state id, or just its first few characters",
+			"  <id>         a snapshot id, or just its first few characters",
 		Example: `  # Jump back to how things were 2 hours ago
   spor go 2h ago
 

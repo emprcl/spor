@@ -15,7 +15,7 @@ func TestRenderVerifyClean(t *testing.T) {
 	if !strings.Contains(out, "intact") {
 		t.Errorf("clean output missing 'intact': %q", out)
 	}
-	if !strings.Contains(out, "3 states") || !strings.Contains(out, "5 blobs") {
+	if !strings.Contains(out, "3 snapshots") || !strings.Contains(out, "5 blobs") {
 		t.Errorf("clean output missing counts: %q", out)
 	}
 }

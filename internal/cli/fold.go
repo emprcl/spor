@@ -16,13 +16,13 @@ func newFoldCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "fold <a> <b>",
-		Short: "Squash a run of states into one",
-		Long: "Collapse the history from an older state (a) up to a newer one (b) into a " +
-			"single state that keeps b's contents. The states in between are permanently " +
+		Short: "Squash a run of snapshots into one",
+		Long: "Collapse the history from an older snapshot (a) up to a newer one (b) into a " +
+			"single snapshot that keeps b's contents. The snapshots in between are permanently " +
 			"lost; only the point before a and b's final contents survive. The range " +
-			"must be a straight line: no state in it may have a branch off to the side. " +
+			"must be a straight line: no snapshot in it may have a branch off to the side. " +
 			"This cannot be undone.\n\n" +
-			"a and b are state refs; a multi-word time ref must be quoted, e.g. " +
+			"a and b are snapshot refs; a multi-word time ref must be quoted, e.g. " +
 			"spor fold \"2h ago\" @.",
 		Example: `  # Squash the last five states into one
   spor fold @~5 @
@@ -52,10 +52,10 @@ func newFoldCmd() *cobra.Command {
 				lost := plan.StatesFolded - 1
 				fmt.Fprintf(out, "Folding %s..%s squashes %d %s into one, losing %d intermediate %s.\n",
 					abbrev(plan.From), abbrev(plan.To),
-					plan.StatesFolded, plural(plan.StatesFolded, "state", "states"),
-					lost, plural(lost, "state", "states"))
+					plan.StatesFolded, plural(plan.StatesFolded, "snapshot", "snapshots"),
+					lost, plural(lost, "snapshot", "snapshots"))
 				if plan.HeadWillMove {
-					fmt.Fprintln(out, "  HEAD will move to the folded state and your working files will change to match.")
+					fmt.Fprintln(out, "  HEAD will move to the folded snapshot and your working files will change to match.")
 				}
 				fmt.Fprintln(out, "  This cannot be undone.")
 				if !promptYesNo(cmd.InOrStdin(), out, "Fold?") {
@@ -72,7 +72,7 @@ func newFoldCmd() *cobra.Command {
 				fmt.Fprintf(out, "recorded current changes as %s\n", res.SettledID)
 			}
 			fmt.Fprintf(out, "Folded %d %s into %s.\n",
-				res.Dropped, plural(res.Dropped, "state", "states"), abbrev(res.Folded))
+				res.Dropped, plural(res.Dropped, "snapshot", "snapshots"), abbrev(res.Folded))
 			if res.HeadMovedTo != "" {
 				fmt.Fprintf(out, "HEAD is now %s.\n", abbrev(res.HeadMovedTo))
 			}

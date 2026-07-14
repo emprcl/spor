@@ -17,14 +17,14 @@ func newKeepfromCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "keepfrom <ref>",
-		Short: "Keep a state and what follows, drop everything before it",
-		Long: "Keep a state and everything after it, and permanently drop everything " +
+		Short: "Keep a snapshot and what follows, drop everything before it",
+		Long: "Keep a snapshot and everything after it, and permanently drop everything " +
 			"before: its history and any side branches. This is how a long-running " +
 			"project forgets old history and reclaims disk space while keeping " +
-			"everything from a chosen point forward. If you are on a state being " +
-			"dropped, you move to the kept state and your files change to match. This " +
+			"everything from a chosen point forward. If you are on a snapshot being " +
+			"dropped, you move to the kept snapshot and your files change to match. This " +
 			"cannot be undone.\n\n" +
-			"A <ref> selects the state; see 'spor go --help' for the forms.",
+			"A <ref> selects the snapshot; see 'spor go --help' for the forms.",
 		Example: `  # Forget everything before v1.0, keeping it and all later work
   spor keepfrom v1.0`,
 		Args: cobra.MinimumNArgs(1),
@@ -54,8 +54,8 @@ func newKeepfromCmd() *cobra.Command {
 			if !yes {
 				fmt.Fprintf(out, "Keeping from %s keeps %d %s and drops %d %s.\n",
 					abbrev(plan.Target),
-					plan.StatesKept, plural(plan.StatesKept, "state", "states"),
-					plan.StatesToDrop, plural(plan.StatesToDrop, "state", "states"))
+					plan.StatesKept, plural(plan.StatesKept, "snapshot", "snapshots"),
+					plan.StatesToDrop, plural(plan.StatesToDrop, "snapshot", "snapshots"))
 				if plan.HeadWillMove {
 					fmt.Fprintln(out, "  You are on a branch being dropped; HEAD will move to the new root and your working files will change to match.")
 				}
@@ -71,7 +71,7 @@ func newKeepfromCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "Kept from %s; dropped %d %s, kept %d.\n",
-				abbrev(res.Target), res.Dropped, plural(res.Dropped, "state", "states"), res.Kept)
+				abbrev(res.Target), res.Dropped, plural(res.Dropped, "snapshot", "snapshots"), res.Kept)
 			if res.HeadMovedTo != "" {
 				fmt.Fprintf(out, "HEAD is now %s.\n", abbrev(res.HeadMovedTo))
 			}

@@ -21,7 +21,7 @@ func newForgetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "forget",
 		Short: "Delete all of spor's history for this project",
-		Long: "Permanently remove the .spor store: every state and all history. Your " +
+		Long: "Permanently remove the .spor store: every snapshot and all history. Your " +
 			"actual project files are left untouched. This cannot be undone. Afterwards " +
 			"the project is no longer tracked, and the next 'spor snap' or 'spor watch' " +
 			"starts fresh.",
@@ -59,7 +59,7 @@ func newForgetCmd() *cobra.Command {
 			if !yes {
 				fmt.Fprintf(out, "This permanently deletes the spor store at %s\n", stats.StoreDir)
 				fmt.Fprintf(out, "  %d %s, %s of history and blobs.\n",
-					stats.StateCount, plural(stats.StateCount, "state", "states"), humanBytes(stats.Bytes))
+					stats.StateCount, plural(stats.StateCount, "snapshot", "snapshots"), humanBytes(stats.Bytes))
 				fmt.Fprintln(out, "  Your working files are left untouched. This cannot be undone.")
 				if !promptYesNo(cmd.InOrStdin(), out, "Delete the store?") {
 					fmt.Fprintln(out, "Aborted; nothing was deleted.")

@@ -16,8 +16,8 @@ func newSnapCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "snap",
-		Short: "Record the current project state now",
-		Long: "Record the current contents of your project as a new state you can jump " +
+		Short: "Save a snapshot of the current project",
+		Long: "Record the current contents of your project as a new snapshot you can jump " +
 			"back to later. If nothing has changed since the last one, nothing is " +
 			"recorded. This is the manual alternative to leaving 'spor watch' running.",
 		Example: `  # Record the current state
@@ -47,11 +47,11 @@ func newSnapCmd() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), "nothing to snap")
 				return nil
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "snap %s\n", res.StateID)
+			fmt.Fprintf(cmd.OutOrStdout(), "snapshot %s\n", res.StateID)
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVarP(&label, "label", "l", "", "name for this state")
+	cmd.Flags().StringVarP(&label, "label", "l", "", "name for this snapshot")
 	return cmd
 }

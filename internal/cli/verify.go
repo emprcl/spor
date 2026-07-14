@@ -17,7 +17,7 @@ func newVerifyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "verify",
 		Short: "Check the stored history for corruption",
-		Long: "Check the store's integrity: that every state's files are present and " +
+		Long: "Check the store's integrity: that every snapshot's files are present and " +
 			"intact, and that the history itself is well-formed. Reports any problems " +
 			"and exits non-zero if the store is not intact.",
 		Example: `  # Check the store for corruption
@@ -54,7 +54,7 @@ func newVerifyCmd() *cobra.Command {
 // renderVerify prints the check summary and any issues found.
 func renderVerify(w io.Writer, res core.VerifyResult) {
 	summary := fmt.Sprintf("%d %s, %d %s",
-		res.StatesChecked, plural(res.StatesChecked, "state", "states"),
+		res.StatesChecked, plural(res.StatesChecked, "snapshot", "snapshots"),
 		res.BlobsChecked, plural(res.BlobsChecked, "blob", "blobs"))
 
 	if res.OK() {

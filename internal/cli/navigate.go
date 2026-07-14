@@ -15,10 +15,10 @@ import (
 func newUndoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "undo [n]",
-		Short: "Step back to an earlier state",
-		Long: "Move back n states (default 1) along the current line of history and " +
+		Short: "Step back to an earlier snapshot",
+		Long: "Move back n snapshots (default 1) along the current line of history and " +
 			"restore your files to match. Undo is reversible with redo. If you ask for " +
-			"more steps than exist, it stops at the oldest state.",
+			"more steps than exist, it stops at the oldest snapshot.",
 		Example: `  # Step back one state
   spor undo
 
@@ -41,10 +41,10 @@ func newUndoCmd() *cobra.Command {
 func newRedoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "redo [n]",
-		Short: "Step forward to a state you undid",
-		Long: "Move forward n states (default 1), following the branch you most " +
+		Short: "Step forward to a snapshot you undid",
+		Long: "Move forward n snapshots (default 1), following the branch you most " +
 			"recently left. If you ask for more steps than exist, it stops at the " +
-			"newest state. Other branches are reached with 'log' and 'go'.",
+			"newest snapshot. Other branches are reached with 'log' and 'go'.",
 		Example: `  # Step forward one state
   spor redo
 
@@ -101,13 +101,13 @@ func runMove(cmd *cobra.Command, verb string, do func(context.Context, *core.Eng
 		if verb == "redo" {
 			edge = "newest"
 		}
-		fmt.Fprintf(out, "already at the %s state, nothing to %s\n", edge, verb)
+		fmt.Fprintf(out, "already at the %s snapshot, nothing to %s\n", edge, verb)
 		return nil
 	}
 	if res.Settled {
 		fmt.Fprintf(out, "recorded current changes as %s\n", res.SettledID)
 	}
-	fmt.Fprintf(out, "%s %d state(s) to %s (%d written, %d removed)\n",
+	fmt.Fprintf(out, "%s %d snapshot(s) to %s (%d written, %d removed)\n",
 		past(verb), res.Steps, res.StateID, res.Written, res.Deleted)
 	return nil
 }

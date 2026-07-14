@@ -18,13 +18,13 @@ func newDropfromCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "dropfrom <ref>",
-		Short: "Delete a state and everything after it",
-		Long: "Permanently delete a state and everything that came after it. On the " +
-			"newest state this drops just that one; after an undo it drops the whole " +
-			"forward branch; on the very first state it wipes all history. If you are " +
-			"on a state being deleted, you move to the one before it and your files " +
+		Short: "Delete a snapshot and everything after it",
+		Long: "Permanently delete a snapshot and everything that came after it. On the " +
+			"newest snapshot this drops just that one; after an undo it drops the whole " +
+			"forward branch; on the very first snapshot it wipes all history. If you are " +
+			"on a snapshot being deleted, you move to the one before it and your files " +
 			"change to match. This cannot be undone.\n\n" +
-			"A <ref> selects the state; see 'spor go --help' for the forms.",
+			"A <ref> selects the snapshot; see 'spor go --help' for the forms.",
 		Example: `  # Delete the current state and everything after it
   spor dropfrom @
 
@@ -55,7 +55,7 @@ func newDropfromCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 			if !yes {
 				fmt.Fprintf(out, "Dropping from %s deletes %d %s.\n",
-					abbrev(plan.Target), plan.StatesToDelete, plural(plan.StatesToDelete, "state", "states"))
+					abbrev(plan.Target), plan.StatesToDelete, plural(plan.StatesToDelete, "snapshot", "snapshots"))
 				if plan.WipesEntireStore {
 					fmt.Fprintln(out, "  This wipes ALL history; your working files are left untouched.")
 				} else if plan.HeadWillMove {
@@ -72,7 +72,7 @@ func newDropfromCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "Dropped %d %s.\n", res.Deleted, plural(res.Deleted, "state", "states"))
+			fmt.Fprintf(out, "Dropped %d %s.\n", res.Deleted, plural(res.Deleted, "snapshot", "snapshots"))
 			switch {
 			case res.HeadCleared:
 				fmt.Fprintln(out, "All history is gone; the next snap starts a fresh timeline.")

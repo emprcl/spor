@@ -21,8 +21,8 @@ func newStatusCmd() *cobra.Command {
 		Short: "Show a summary of the project and where you are",
 		Long: "A quick overview: the project path, whether a watcher is running, how " +
 			"large the history is (snapshots and branches), how much disk the store " +
-			"uses, and where the current state (@) sits, whether you are on the latest " +
-			"or have rewound with newer states still ahead.",
+			"uses, and where the current snapshot (@) sits, whether you are on the latest " +
+			"or have rewound with newer snapshots still ahead.",
 		Example: `  # Show where you are and how large the history is
   spor status`,
 		Args: cobra.NoArgs,
@@ -66,7 +66,7 @@ func renderStatus(w io.Writer, st core.StatusResult) {
 		row(styleStatusKey, "watcher", styleStatusKey.Render("not running"))
 	}
 
-	hist := count(st.StateCount, "snap", "snaps")
+	hist := count(st.StateCount, "snapshot", "snapshots")
 	if st.Tips > 0 {
 		hist += styleStatusKey.Render("  ·  ") + count(st.Tips, "timeline", "timelines")
 	}
@@ -75,7 +75,7 @@ func renderStatus(w io.Writer, st core.StatusResult) {
 
 	// The @ marker is colored like the current-state marker in `spor log`.
 	if !st.HasHead {
-		row(styleHeadTag, "@", styleStatusKey.Render("no states yet"))
+		row(styleHeadTag, "@", styleStatusKey.Render("no snapshots yet"))
 		return
 	}
 	val := styleID.Render(abbrev(st.Head.ID))
@@ -88,7 +88,7 @@ func renderStatus(w io.Writer, st core.StatusResult) {
 	// A second line places @ within the history: on the tip, or rewound with newer
 	// states ahead that redo/go can move to.
 	if st.Ahead > 0 {
-		row(styleStatusKey, "", count(st.Ahead, "newer snap", "newer snaps")+
+		row(styleStatusKey, "", count(st.Ahead, "newer snapshot", "newer snapshots")+
 			styleStatusKey.Render(" ahead, redo or go to move forward"))
 	} else {
 		row(styleStatusKey, "", styleStatusKey.Render("at the tip of its timeline"))

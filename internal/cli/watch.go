@@ -27,9 +27,9 @@ func newWatchCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "watch",
 		Short: "Watch the project and snapshot it automatically",
-		Long: "Run in the foreground and record a new state every time the project " +
+		Long: "Run in the foreground and record a new snapshot every time the project " +
 			"settles after a change, so you never have to snapshot by hand. The history " +
-			"is shown live, updating as states appear. Press Ctrl+C to stop watching.",
+			"is shown live, updating as snapshots appear. Press Ctrl+C to stop watching.",
 		Example: `  # Watch and snapshot automatically until you press Ctrl+C
   spor watch`,
 		Args: cobra.NoArgs,
@@ -312,7 +312,7 @@ func logWatch(w io.Writer, ev watch.Event) {
 	switch ev.Kind {
 	case watch.Created:
 		fmt.Fprintln(w, ts+"  "+styleWatchDot.Render("●")+"  "+
-			styleWatchPath.Render(ev.ID)+"  "+styleWatchHint.Render("snap"))
+			styleWatchPath.Render(ev.ID)+"  "+styleWatchHint.Render("snapshot"))
 	case watch.Error:
 		fmt.Fprintln(w, ts+"  "+styleWatchErr.Render("✗")+"  "+ev.Err.Error())
 	case watch.Settling, watch.NoChange:

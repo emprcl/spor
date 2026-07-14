@@ -18,11 +18,11 @@ import (
 func newLabelCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "label [<ref> <name>]",
-		Short: "Name a state, or list existing labels",
-		Long: "With no arguments, list every label and the state it names. With a " +
-			"<ref> and a <name>, name that state so you can refer to it by name " +
-			"anywhere a <ref> is accepted. A label is a unique alias, like a state " +
-			"id: naming a state never changes your history.",
+		Short: "Name a snapshot, or list existing labels",
+		Long: "With no arguments, list every label and the snapshot it names. With a " +
+			"<ref> and a <name>, name that snapshot so you can refer to it by name " +
+			"anywhere a <ref> is accepted. A label is a unique alias, like a snapshot " +
+			"id: naming a snapshot never changes your history.",
 		Example: `  # Name the current state
   spor label @ v1.0
 
@@ -71,7 +71,7 @@ func runLabelList(ctx context.Context, cmd *cobra.Command, eng *core.Engine) err
 	}
 	out := cmd.OutOrStdout()
 	if len(labels) == 0 {
-		fmt.Fprintln(out, "No labels yet. Name a state with 'spor label <ref> <name>'.")
+		fmt.Fprintln(out, "No labels yet. Name a snapshot with 'spor label <ref> <name>'.")
 		return nil
 	}
 
