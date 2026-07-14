@@ -21,6 +21,11 @@ import (
 // storageDir is the project-local directory spor owns.
 const storageDir = ".spor"
 
+// dbMaxConns bounds the SQLite connection pool. WAL plus the flock write lock lets
+// several readers run alongside the one serialized writer; a small pool is plenty
+// for a single-user tool and avoids unbounded file descriptors.
+const dbMaxConns = 8
+
 // Engine holds an opened project store. Create it with OpenOrInit and release it
 // with Close.
 type Engine struct {
@@ -73,7 +78,7 @@ func OpenOrInit(ctx context.Context, start string) (*Engine, error) {
 			return nil, err
 		}
 	}
-	return openAt(ctx, root)
+	return openChecked(ctx, root)
 }
 
 // ErrNotProject is returned when no store is found at or above the starting
@@ -85,14 +90,50 @@ var ErrNotProject = fmt.Errorf("not a spor project (no %s found); run 'spor snap
 // is found it returns ErrNotProject. This is the entry point for read commands
 // such as log. See docs/design-spec.md §8.
 func OpenExisting(ctx context.Context, start string) (*Engine, error) {
-	root, found, err := Discover(start)
+	root, err := discoverExisting(start)
 	if err != nil {
 		return nil, err
 	}
-	if !found {
-		return nil, ErrNotProject
+	return openChecked(ctx, root)
+}
+
+// OpenForRepair opens an existing store *without* the on-open consistency check,
+// for the two commands that must work on a damaged store: `verify` (which runs its
+// own full check) and `forget` (which removes the store). See docs/design-spec.md §8.
+func OpenForRepair(ctx context.Context, start string) (*Engine, error) {
+	root, err := discoverExisting(start)
+	if err != nil {
+		return nil, err
 	}
 	return openAt(ctx, root)
+}
+
+// discoverExisting resolves start to a project root, returning ErrNotProject when
+// there is no store at or above it.
+func discoverExisting(start string) (string, error) {
+	root, found, err := Discover(start)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", ErrNotProject
+	}
+	return root, nil
+}
+
+// openChecked opens the store at root and runs the on-open consistency check
+// (docs/design-spec.md §8), so no command builds on a structurally broken store.
+// The store is closed again if the check fails.
+func openChecked(ctx context.Context, root string) (*Engine, error) {
+	e, err := openAt(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.checkConsistency(ctx); err != nil {
+		e.Close()
+		return nil, err
+	}
+	return e, nil
 }
 
 // guardImplicitInit refuses to implicitly create a store in a directory that is
@@ -141,9 +182,11 @@ func openAt(ctx context.Context, root string) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Single connection: this is a local single-writer store, and it sidesteps
-	// SQLITE_BUSY entirely for now. Concurrent readers can be enabled later.
-	sqldb.SetMaxOpenConns(1)
+	// Many readers may run concurrently with the single writer: WAL gives readers a
+	// committed snapshot without blocking the writer, the flock write lock (not the
+	// DB) serializes writers so two never race, and busy_timeout absorbs any
+	// contention. Funnelling everything through one connection is unnecessary.
+	sqldb.SetMaxOpenConns(dbMaxConns)
 
 	if err := db.Migrate(ctx, sqldb, dbPath); err != nil {
 		sqldb.Close()

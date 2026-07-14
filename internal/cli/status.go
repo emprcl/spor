@@ -83,7 +83,7 @@ func renderStatus(w io.Writer, st core.StatusResult) {
 	// states ahead that redo/go can move to.
 	if st.Ahead > 0 {
 		row(styleStatusKey, "", count(st.Ahead, "newer snap", "newer snaps")+
-			styleStatusKey.Render(" ahead — redo or go to move forward"))
+			styleStatusKey.Render(" ahead, redo or go to move forward"))
 	} else {
 		row(styleStatusKey, "", styleStatusKey.Render("at the tip of its timeline"))
 	}

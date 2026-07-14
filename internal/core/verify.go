@@ -28,6 +28,47 @@ type VerifyResult struct {
 // OK reports whether the store passed with no issues.
 func (r VerifyResult) OK() bool { return len(r.Issues) == 0 }
 
+// ErrCorruptStore is returned by the on-open consistency check when the store is
+// structurally broken (a dangling HEAD or parent, or a cycle). The store is not
+// opened for use; the caller is pointed at `spor verify` for a full report.
+var ErrCorruptStore = errors.New("store is corrupt")
+
+// checkConsistency runs the cheap, structural subset of Verify (HEAD resolves, no
+// dangling parent, and an acyclic graph) without reading any blob. It runs on
+// every open (except OpenForRepair) so no operation builds on a broken store; blob
+// presence and hashes are left to the on-demand `verify` (docs/design-spec.md §8).
+func (e *Engine) checkConsistency(ctx context.Context) error {
+	states, err := e.q.ListStates(ctx)
+	if err != nil {
+		return fmt.Errorf("listing states: %w", err)
+	}
+	byID := make(map[string]gen.ListStatesRow, len(states))
+	for _, s := range states {
+		byID[s.ID] = s
+	}
+
+	head, err := e.q.GetHead(ctx)
+	if err != nil {
+		return fmt.Errorf("reading HEAD: %w", err)
+	}
+	if head.Valid {
+		if _, ok := byID[head.String]; !ok {
+			return fmt.Errorf("%w: HEAD points to missing state %s", ErrCorruptStore, shortHash(head.String))
+		}
+	}
+	for _, s := range states {
+		if s.ParentID.Valid {
+			if _, ok := byID[s.ParentID.String]; !ok {
+				return fmt.Errorf("%w: state %s has missing parent %s", ErrCorruptStore, shortHash(s.ID), shortHash(s.ParentID.String))
+			}
+		}
+	}
+	if at, ok := detectCycle(byID); ok {
+		return fmt.Errorf("%w: the parent graph has a cycle at %s", ErrCorruptStore, shortHash(at))
+	}
+	return nil
+}
+
 // Verify checks store integrity (docs/design-spec.md §8): every referenced blob exists
 // and matches its SHA-256; every manifest's stored hash recomputes; every parent
 // and HEAD resolves to a real state; and the parent graph is acyclic. It is a

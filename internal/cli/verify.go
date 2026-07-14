@@ -24,7 +24,7 @@ func newVerifyCmd() *cobra.Command {
 				return err
 			}
 			ctx := cmd.Context()
-			eng, err := core.OpenExisting(ctx, root)
+			eng, err := core.OpenForRepair(ctx, root)
 			if err != nil {
 				return err
 			}

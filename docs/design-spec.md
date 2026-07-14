@@ -514,7 +514,7 @@ It refuses while a `spor watch` is running, and because it is irreversible it
 confirms and reports how much will be deleted. It never touches your working
 files, only `.spor/`.
 
-**Sync** (optional, see §7) — _not yet implemented_:
+**Sync** (optional, see §7), _not yet implemented_:
 
 | Command | Effect |
 |---|---|
@@ -642,10 +642,16 @@ requires a local one.
 
 ### Crash recovery
 
-Whenever the store is opened, recovery runs first: remove abandoned temp files;
-incomplete state creations are automatically discarded (nothing was committed);
-leftover blobs are orphans; verify basic consistency. Only then does the caller
-(a one-shot command or `spor watch`) proceed.
+Whenever the store is opened, recovery runs first. Abandoned temp files are
+removed. Incomplete state creations need no cleanup: a state row and its `HEAD`
+advance commit in one transaction, so a crash leaves either the whole state or
+none, and blobs from an abandoned state are harmless orphans that GC reclaims.
+A cheap structural check then runs (`HEAD` resolves, no dangling parent, and an
+acyclic graph), and the store refuses to open if it fails, pointing at
+`spor verify` for detail. The check reads no blobs; blob presence and hashes are
+left to `verify`. `verify` and `forget` skip the check so they can act on a
+damaged store. Only then does the caller (a one-shot command or `spor watch`)
+proceed.
 
 ### Schema versioning
 
@@ -698,8 +704,9 @@ stat cache, ignore rules (built-in defaults plus root `.sporignore`), the
 zstd-compressed content-addressed blob store, the state tree and HEAD journal,
 `go` / `undo` / `redo`, `dropfrom` / `keepfrom` / `fold`, `label`, `diff`, `log`
 (newest-first swimlanes with folding), `status`, `verify`, `gc`, `forget`,
-advisory file locking, schema versioning and migrations, and crash-safe write
-ordering for state creation.
+advisory file locking, schema versioning and migrations, crash-safe write
+ordering with an on-open consistency check, and concurrent readers alongside the
+single serialized writer.
 
 The following are described above but **not yet implemented** (planned):
 
@@ -709,11 +716,6 @@ The following are described above but **not yet implemented** (planned):
   keyboard-driven navigation or in-view mutation.
 - **Symlinks** (§2): only regular files are tracked.
 - **Carrying locked-but-present paths on Windows** (§4).
-- **Full on-open crash recovery** (§8): abandoned temp files are cleared and
-  interrupted state creations are discarded by transaction boundaries, but the
-  broader on-open consistency sweep is not yet in place.
-- **Concurrent readers** (§8): the store currently opens a single SQLite
-  connection; the WAL many-readers path is configured but not yet exercised.
 - **Content-defined chunking** (§3) and **diff caching** (§5): performance
   upgrades, not yet needed.
 
