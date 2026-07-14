@@ -1,0 +1,5 @@
+-- name: DeleteState :exec
+DELETE FROM states WHERE id = ?;
+
+-- name: SetStateParentNull :exec
+UPDATE states SET parent_id = NULL WHERE id = ?;

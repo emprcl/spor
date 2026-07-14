@@ -91,8 +91,33 @@ func runWatchLive(ctx context.Context, eng *core.Engine, root string, f *os.File
 	if err != nil {
 		return err
 	}
-	if err := w.Run(ctx); err != nil {
-		return err
+
+	// Out-of-band changes (prune, reroot, restore, undo/redo run from another
+	// terminal) mutate the state graph without producing filesystem events, so the
+	// watcher pipeline never fires for them. A low-frequency poll repaints when the
+	// tree has changed; the frame dedup in repaintLocked makes an unchanged poll a
+	// no-op, and it keeps relative timestamps fresh too.
+	pollCtx, stopPoll := context.WithCancel(ctx)
+	pollDone := make(chan struct{})
+	go func() {
+		defer close(pollDone)
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-pollCtx.Done():
+				return
+			case <-t.C:
+				v.repaint(pollCtx)
+			}
+		}
+	}()
+
+	runErr := w.Run(ctx)
+	stopPoll()
+	<-pollDone
+	if runErr != nil {
+		return runErr
 	}
 
 	// Leave the alternate screen, then reprint the final tree to the main buffer
@@ -117,10 +142,11 @@ type liveView struct {
 	f       *os.File
 	profile colorprofile.Profile
 
-	mu     sync.Mutex
-	left   bool   // the alternate screen has been restored
-	status string // transient activity note (e.g. "settling...")
-	errMsg string // last error, shown until the next successful snapshot
+	mu        sync.Mutex
+	left      bool   // the alternate screen has been restored
+	status    string // transient activity note (e.g. "settling...")
+	errMsg    string // last error, shown until the next successful snapshot
+	lastFrame string // last frame written, to skip redundant repaints
 }
 
 // enter switches to the alternate screen and hides the cursor.
@@ -175,7 +201,9 @@ func (v *liveView) repaintLocked(ctx context.Context) {
 	}
 	res, err := v.eng.Log(ctx)
 	if err != nil {
-		v.errMsg = err.Error()
+		// A transient read failure, or a cancelled context during shutdown, must
+		// not blank the view; keep the last frame.
+		return
 	}
 
 	// Render the tree with color reconciled to the terminal (the buffer is not a
@@ -216,7 +244,12 @@ func (v *liveView) repaintLocked(ctx context.Context) {
 	if footer != "" {
 		frame.WriteString(footer)
 	}
-	_, _ = io.WriteString(v.f, frame.String())
+	s := frame.String()
+	if s == v.lastFrame {
+		return // nothing changed; skip the redundant repaint (and its flicker)
+	}
+	v.lastFrame = s
+	_, _ = io.WriteString(v.f, s)
 }
 
 // footer returns the status/error line, downsampled to the terminal profile, or

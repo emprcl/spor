@@ -69,32 +69,9 @@ func (e *Engine) restoreToLocked(ctx context.Context, target string) (RestoreRes
 		return RestoreResult{}, fmt.Errorf("force-settling before restore: %w", err)
 	}
 
-	// The post-settle HEAD manifest is exactly what is on disk now, so it is the
-	// authority for which files to delete.
-	head, err := e.q.GetHead(ctx)
+	// Steps 2 and 3: materialize the target over the current tree and move HEAD.
+	written, deleted, err := e.materializeTo(ctx, target)
 	if err != nil {
-		return RestoreResult{}, fmt.Errorf("reading HEAD: %w", err)
-	}
-	targetManifest, err := e.q.ListManifestEntries(ctx, target)
-	if err != nil {
-		return RestoreResult{}, fmt.Errorf("reading target manifest: %w", err)
-	}
-	var current []gen.ListManifestEntriesRow
-	if head.Valid {
-		current, err = e.q.ListManifestEntries(ctx, head.String)
-		if err != nil {
-			return RestoreResult{}, fmt.Errorf("reading current manifest: %w", err)
-		}
-	}
-
-	// Step 2: materialize the target over the current tree.
-	written, deleted, err := e.materialize(targetManifest, current)
-	if err != nil {
-		return RestoreResult{}, err
-	}
-
-	// Step 3: point HEAD at the restored state and journal the move.
-	if err := e.setHeadTo(ctx, target); err != nil {
 		return RestoreResult{}, err
 	}
 
@@ -104,6 +81,38 @@ func (e *Engine) restoreToLocked(ctx context.Context, target string) (RestoreRes
 		res.SettledID = settle.StateID
 	}
 	return res, nil
+}
+
+// materializeTo writes target's manifest into the working tree and points HEAD at
+// it, without force-settling first (the caller decides whether to settle). It is
+// the shared tail of restore and of the HEAD relocation prune/reroot perform when
+// the current branch is about to be dropped. The caller must hold the write lock.
+// The post-settle HEAD manifest is the authority for which files to delete, so
+// callers that need the working tree to match HEAD should settle beforehand.
+func (e *Engine) materializeTo(ctx context.Context, target string) (written, deleted int, err error) {
+	head, err := e.q.GetHead(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("reading HEAD: %w", err)
+	}
+	targetManifest, err := e.q.ListManifestEntries(ctx, target)
+	if err != nil {
+		return 0, 0, fmt.Errorf("reading target manifest: %w", err)
+	}
+	var current []gen.ListManifestEntriesRow
+	if head.Valid {
+		current, err = e.q.ListManifestEntries(ctx, head.String)
+		if err != nil {
+			return 0, 0, fmt.Errorf("reading current manifest: %w", err)
+		}
+	}
+	written, deleted, err = e.materialize(targetManifest, current)
+	if err != nil {
+		return written, deleted, err
+	}
+	if err := e.setHeadTo(ctx, target); err != nil {
+		return written, deleted, err
+	}
+	return written, deleted, nil
 }
 
 // materialize writes the target manifest into the working tree and removes files

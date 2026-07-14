@@ -29,6 +29,8 @@ func Root() *cobra.Command {
 	root.AddCommand(newRedoCmd())
 	root.AddCommand(newStatusCmd())
 	root.AddCommand(newForgetCmd())
+	root.AddCommand(newPruneCmd())
+	root.AddCommand(newRerootCmd())
 	root.AddCommand(newGCCmd())
 	root.AddCommand(newVerifyCmd())
 

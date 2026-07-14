@@ -24,7 +24,13 @@ func (e *Engine) GC(ctx context.Context) (GCResult, error) {
 		return GCResult{}, err
 	}
 	defer func() { _ = wl.Release() }()
+	return e.gcLocked(ctx)
+}
 
+// gcLocked is GC's mark-sweep body, assuming the caller already holds the write
+// lock. Prune, reroot, and compact run it after removing states so newly
+// unreferenced blobs are reclaimed in the same locked operation (docs/SPEC.md §8).
+func (e *Engine) gcLocked(ctx context.Context) (GCResult, error) {
 	referenced, err := e.referencedBlobHashes(ctx)
 	if err != nil {
 		return GCResult{}, err
