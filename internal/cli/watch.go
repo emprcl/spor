@@ -229,8 +229,10 @@ func (v *liveView) repaintLocked(ctx context.Context) {
 	if avail < 1 {
 		avail = 1
 	}
+	// The log is newest-first, so keep the top rows: an overflowing tree drops the
+	// oldest states, never the recent ones the watcher is here to show.
 	if len(tree) > avail {
-		tree = tree[len(tree)-avail:]
+		tree = tree[:avail]
 	}
 
 	var frame bytes.Buffer
