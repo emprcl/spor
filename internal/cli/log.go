@@ -240,7 +240,7 @@ const foldMax = 3
 func foldRuns(lines []graphLine) []graphLine {
 	out := make([]graphLine, 0, len(lines))
 	for i := 0; i < len(lines); {
-		if !(lines[i].isNode && lines[i].width1 && lines[i].foldable) {
+		if !lines[i].isNode || !lines[i].width1 || !lines[i].foldable {
 			out = append(out, lines[i])
 			i++
 			continue
