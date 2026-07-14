@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 
-	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
@@ -52,16 +51,6 @@ func newDiffCmd() *cobra.Command {
 		},
 	}
 }
-
-// Diff styles, kept in the same palette as log: additions green, deletions red,
-// hunk headers blue, file headers pink, metadata dim.
-var (
-	styleDiffAdd  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	styleDiffDel  = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	styleDiffHunk = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	styleDiffHead = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
-	styleDiffMeta = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-)
 
 // renderDiff prints a diff result as a colored, unified-style diff. Callers wrap
 // w in a colorprofile.Writer so the output is colored on a terminal and plain

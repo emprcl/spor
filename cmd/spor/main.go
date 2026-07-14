@@ -12,7 +12,11 @@ import (
 )
 
 func main() {
-	if err := fang.Execute(context.Background(), cli.Root()); err != nil {
+	if err := fang.Execute(
+		context.Background(),
+		cli.Root(),
+		fang.WithColorSchemeFunc(cli.HelpColorScheme),
+	); err != nil {
 		os.Exit(1)
 	}
 }

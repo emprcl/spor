@@ -43,11 +43,6 @@ func newStatusCmd() *cobra.Command {
 	}
 }
 
-var (
-	styleStatusKey = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	styleStatusOn  = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
-)
-
 // renderStatus prints an aligned key/value view of the project's status.
 func renderStatus(w io.Writer, st core.StatusResult) {
 	row := func(keyStyle lipgloss.Style, key, val string) {

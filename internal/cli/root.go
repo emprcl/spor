@@ -32,6 +32,14 @@ func Root() *cobra.Command {
 			"no staging, no version-control ceremony.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Detect the terminal background and build the palette once, before any
+		// subcommand renders. This is the single place the app theme is loaded;
+		// cobra runs it for every subcommand (none override it), and it is skipped
+		// for the bare `spor` help screen, which fang themes on its own.
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			loadTheme()
+			return nil
+		},
 	}
 
 	root.AddGroup(

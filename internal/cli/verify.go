@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 
@@ -46,11 +45,6 @@ func newVerifyCmd() *cobra.Command {
 		},
 	}
 }
-
-var (
-	styleVerifyOK  = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
-	styleVerifyBad = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true)
-)
 
 // renderVerify prints the check summary and any issues found.
 func renderVerify(w io.Writer, res core.VerifyResult) {

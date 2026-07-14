@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
@@ -300,15 +299,6 @@ func runWatchStream(ctx context.Context, eng *core.Engine, root string, w io.Wri
 	fmt.Fprintln(out, styleWatchHint.Render("stopped watching."))
 	return nil
 }
-
-// Live-monitor styles, kept close to the log command's palette.
-var (
-	styleWatchBanner = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
-	styleWatchPath   = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	styleWatchHint   = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	styleWatchDot    = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	styleWatchErr    = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true)
-)
 
 // logWatch renders one watcher event as a line in the streaming fallback monitor.
 // Only states appearing and errors are shown; settling and no-op ticks are kept

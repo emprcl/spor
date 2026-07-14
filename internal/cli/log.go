@@ -7,7 +7,6 @@ import (
 	"sort"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 
@@ -46,18 +45,6 @@ func newLogCmd() *cobra.Command {
 		},
 	}
 }
-
-// Styles for the history tree. lipgloss v2 styles are standalone; color is
-// reconciled to the terminal by the colorprofile.Writer they are printed through.
-var (
-	styleDot     = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	styleHeadDot = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
-	styleID      = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	styleTime    = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	styleLabel   = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
-	styleConn    = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
-	styleHeadTag = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
-)
 
 // renderLog draws the history tree to w. Callers wrap w in a colorprofile.Writer
 // so the same styled output is colored on a terminal and plain under test or a
