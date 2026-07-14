@@ -31,6 +31,7 @@ func Root() *cobra.Command {
 	root.AddCommand(newForgetCmd())
 	root.AddCommand(newDropfromCmd())
 	root.AddCommand(newKeepfromCmd())
+	root.AddCommand(newFoldCmd())
 	root.AddCommand(newGCCmd())
 	root.AddCommand(newVerifyCmd())
 

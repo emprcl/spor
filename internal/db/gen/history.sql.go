@@ -7,6 +7,7 @@ package gen
 
 import (
 	"context"
+	"database/sql"
 )
 
 const deleteState = `-- name: DeleteState :exec
@@ -15,6 +16,20 @@ DELETE FROM states WHERE id = ?
 
 func (q *Queries) DeleteState(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteState, id)
+	return err
+}
+
+const setStateParent = `-- name: SetStateParent :exec
+UPDATE states SET parent_id = ? WHERE id = ?
+`
+
+type SetStateParentParams struct {
+	ParentID sql.NullString
+	ID       string
+}
+
+func (q *Queries) SetStateParent(ctx context.Context, arg SetStateParentParams) error {
+	_, err := q.db.ExecContext(ctx, setStateParent, arg.ParentID, arg.ID)
 	return err
 }
 

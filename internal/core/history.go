@@ -53,6 +53,24 @@ func (g *stateGraph) subtree(root string) map[string]struct{} {
 	return set
 }
 
+// rangePath returns the states on the path from descendant up to ancestor,
+// inclusive, ordered descendant-first (so it doubles as a children-before-parents
+// deletion order). ok is false when ancestor is not on descendant's ancestor line,
+// i.e. the walk reaches a root without meeting it.
+func (g *stateGraph) rangePath(ancestor, descendant string) (path []string, ok bool) {
+	for cur := descendant; ; {
+		path = append(path, cur)
+		if cur == ancestor {
+			return path, true
+		}
+		row, exists := g.byID[cur]
+		if !exists || !row.ParentID.Valid {
+			return nil, false
+		}
+		cur = row.ParentID.String
+	}
+}
+
 // deletionOrder returns the ids in del ordered children-before-parents, so the
 // ON DELETE RESTRICT self-foreign-key on states.parent_id is never violated. It
 // is a post-order over the whole forest, filtered to del.
