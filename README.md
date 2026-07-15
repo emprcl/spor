@@ -46,11 +46,76 @@ A few workflows it might fit well:
 
 ## Installation
 
-Spor is early and has no packaged releases yet. Build it from source with a
-recent Go toolchain (1.25 or newer):
+### Supported platforms
+
+| OS      | Architectures                        |
+| ------- | ------------------------------------ |
+| Linux   | x86-64 (amd64), arm64                |
+| macOS   | Intel (amd64), Apple Silicon (arm64) |
+| Windows | x86-64 (amd64), arm64                |
+
+### Quick-install
+
+On **linux** or **macOS**, you can run this quick-install bash script:
+```sh
+curl -sSL empr.cl/get/spor | bash
+```
+
+### Packages
+
+#### Homebrew (macOS & Linux)
 
 ```sh
+brew tap emprcl/tap
+brew trust emprcl/tap
+brew install spor
+```
+
+### Manual installation
+
+#### Linux & macOS
+
+[Download the last release](https://github.com/emprcl/spor/releases) for your platform.
+
+Then:
+```sh
+# Extract files
+mkdir -p spor && tar -zxvf spor_VERSION_PLATFORM.tar.gz -C spor
+cd spor
+
+# Check it runs
+./spor --version
+
+# Optionally, move it onto your PATH
+sudo mv spor /usr/local/bin/
+```
+
+#### Windows
+
+> _Spor's history view uses colors and box-drawing characters, so a terminal like
+> Windows Terminal with a good monospace font renders it best._
+
+Unzip the last [windows release](https://github.com/emprcl/spor/releases) and, in
+the same directory, run:
+```winbatch
+; Check it runs
+.\spor.exe --version
+```
+
+### Build it yourself
+
+You'll need [go 1.25](https://go.dev/dl/) minimum. Although you should be able to
+build it for either **linux**, **macOS** or **Windows**, it has only been tested
+on **linux**.
+
+```sh
+# Native build
 go build -o spor ./cmd/spor
+
+# Cross-compile with GOOS / GOARCH, e.g.
+GOOS=linux   GOARCH=arm64 go build -o spor ./cmd/spor
+GOOS=darwin  GOARCH=arm64 go build -o spor ./cmd/spor
+GOOS=windows GOARCH=amd64 go build -o spor.exe ./cmd/spor
 ```
 
 ## Usage
