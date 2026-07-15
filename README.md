@@ -1,6 +1,8 @@
 # Spor
 
-:notebook: **[Design Specification](docs/design-spec.md)**
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/emprcl/spor) ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/emprcl/spor/build.yml)
+
+:notebook: **[User Manual](https://empr.cl/spor/)**
 
 Spor is a simple, automatic versioning tool for exploratory work, for when
 you're trying things out, backtracking, and changing direction without a plan
@@ -254,6 +256,7 @@ never creates it: it's entirely opt-in.
 
 ## Documentation
 
+Check the [official website](https://empr.cl/spor/).
 See the [Design Specification](docs/design-spec.md) for the full design and the
 mental model behind Spor.
 
