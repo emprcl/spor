@@ -165,6 +165,65 @@ func TestSnapLabelMustBeUnique(t *testing.T) {
 	}
 }
 
+// TestUnlabelRemovesAndFreesName checks that unlabeling clears the label from
+// its state, and that the name can then be reused elsewhere.
+func TestUnlabelRemovesAndFreesName(t *testing.T) {
+	eng, root := newTestEngine(t)
+	ctx := context.Background()
+
+	write(t, root, "f", "1")
+	a := snapID(t, eng)
+	write(t, root, "f", "2")
+	b := snapID(t, eng)
+
+	if _, err := eng.Label(ctx, a, "v1"); err != nil {
+		t.Fatalf("labeling a: %v", err)
+	}
+	res, err := eng.Unlabel(ctx, "v1")
+	if err != nil {
+		t.Fatalf("Unlabel: %v", err)
+	}
+	if res.StateID != a || res.Name != "v1" {
+		t.Fatalf("Unlabel = %+v, want state %s name v1", res, a)
+	}
+	if got := stateLabel(t, eng, a); got != "" {
+		t.Fatalf("stored label = %q, want empty after unlabel", got)
+	}
+	if _, err := eng.Resolve(ctx, "v1"); err == nil {
+		t.Fatal("Resolve(v1) should fail once the label is removed")
+	}
+
+	// The freed name can be reused on another state.
+	if _, err := eng.Label(ctx, b, "v1"); err != nil {
+		t.Fatalf("b taking the now-free label: %v", err)
+	}
+}
+
+// TestUnlabelUnknownName checks that removing a name that isn't in use is an
+// error, not a silent no-op.
+func TestUnlabelUnknownName(t *testing.T) {
+	eng, root := newTestEngine(t)
+	ctx := context.Background()
+	write(t, root, "f", "1")
+	snapID(t, eng)
+
+	if _, err := eng.Unlabel(ctx, "ghost"); err == nil {
+		t.Fatal("Unlabel of an unused name should error")
+	}
+}
+
+// TestUnlabelRejectsEmptyName checks that an empty name is refused.
+func TestUnlabelRejectsEmptyName(t *testing.T) {
+	eng, root := newTestEngine(t)
+	ctx := context.Background()
+	write(t, root, "f", "1")
+	snapID(t, eng)
+
+	if _, err := eng.Unlabel(ctx, ""); err == nil {
+		t.Fatal("Unlabel with an empty name should error")
+	}
+}
+
 // TestLabelUnknownRef checks that an unresolvable ref is reported.
 func TestLabelUnknownRef(t *testing.T) {
 	eng, root := newTestEngine(t)

@@ -81,6 +81,39 @@ func (e *Engine) Label(ctx context.Context, ref, name string) (LabelResult, erro
 	return LabelResult{StateID: id, Name: name}, nil
 }
 
+// UnlabelResult reports which state a removed label had named.
+type UnlabelResult struct {
+	StateID string
+	Name    string
+}
+
+// Unlabel removes name, freeing it for reuse. It only clears the label; the
+// state it named is untouched, so unlabeling is as harmless as labeling. It
+// runs under the write lock like any other mutating operation.
+func (e *Engine) Unlabel(ctx context.Context, name string) (UnlabelResult, error) {
+	if name == "" {
+		return UnlabelResult{}, errors.New("a label name is required")
+	}
+
+	wl, err := lock.AcquireWrite(ctx, e.writeLockPath())
+	if err != nil {
+		return UnlabelResult{}, err
+	}
+	defer func() { _ = wl.Release() }()
+
+	id, err := e.labelOwner(ctx, name)
+	if err != nil {
+		return UnlabelResult{}, err
+	}
+	if id == "" {
+		return UnlabelResult{}, fmt.Errorf("no such label: %q", name)
+	}
+	if err := e.q.SetStateLabel(ctx, gen.SetStateLabelParams{ID: id}); err != nil {
+		return UnlabelResult{}, fmt.Errorf("removing label: %w", err)
+	}
+	return UnlabelResult{StateID: id, Name: name}, nil
+}
+
 // labelOwner returns the id of the state currently holding name, or "" if the
 // name is free. Labels are unique (docs/design-spec.md §2), so there is at most one.
 func (e *Engine) labelOwner(ctx context.Context, name string) (string, error) {

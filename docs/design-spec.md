@@ -486,7 +486,7 @@ uncommitted edit survives as a branch) and each is itself reversible.
 
 | Command | Effect |
 |---|---|
-| `spor label <ref> <name>` | name a state for easy reference (labels are unique); bare `spor label` lists them |
+| `spor label <ref> <name>` | name a state for easy reference (labels are unique); bare `spor label` lists them; `spor label -d <name>` removes one |
 | `spor diff <ref>` | changes from `<ref>` **to `@`** ("what's changed since then") |
 | `spor diff <a> <b>` | changes between two states |
 | `spor status` | project path, whether a watcher is running, history size (snap and timeline counts), on-disk store size, and where `@` sits (on a tip, or how many newer states are ahead) |
