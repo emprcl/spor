@@ -45,29 +45,102 @@ func TestRenderLogBranching(t *testing.T) {
 	out := renderPlain(res)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 
-	// Newest first: branchB(@) leads the trunk column; the branchA lane runs beside
-	// it and merges back into the trunk at child1.
-	want := []struct{ prefix, contains string }{
-		{"● ", "branchB"},    // @ tip, newest, in the trunk column
-		{"│ ● ", "branchA2"}, // the side branch, newest of it first
-		{"│ ● ", "branchA"},
-		{"├─╯", ""}, // branch merges back toward the trunk
-		{"● ", "child1"},
-		{"● ", "root"},
+	// Metadata leads each row, the graph trails it. Newest first, and columns are
+	// fixed by tree shape, not recency: the original line (root -> child1 -> branchA
+	// -> branchA2) is the trunk in column 0, and the later branchB offshoot keeps its
+	// own column even though it is the newest state. Rows are trimmed of trailing
+	// space, so a node row ends in the rightmost active lane's glyph: "│" while the
+	// offshoot lane runs alongside the trunk, "●" once only the trunk remains.
+	want := []struct{ label, endsWith string }{
+		{"branchB", "●"},  // @ tip, newest, in its own offshoot column
+		{"branchA2", "│"}, // trunk node with the branchB lane still beside it
+		{"branchA", "│"},
+		{"", "╯"}, // the offshoot merges back into the trunk at child1
+		{"child1", "●"},
+		{"root", "●"},
 	}
 	if len(lines) != len(want) {
 		t.Fatalf("got %d lines, want %d:\n%s", len(lines), len(want), out)
 	}
 	for i, w := range want {
-		if !strings.HasPrefix(lines[i], w.prefix) {
-			t.Errorf("line %d = %q, want prefix %q", i, lines[i], w.prefix)
+		if w.label != "" && !strings.Contains(lines[i], w.label) {
+			t.Errorf("line %d = %q, want to contain %q", i, lines[i], w.label)
 		}
-		if !strings.Contains(lines[i], w.contains) {
-			t.Errorf("line %d = %q, want to contain %q", i, lines[i], w.contains)
+		if !strings.HasSuffix(lines[i], w.endsWith) {
+			t.Errorf("line %d = %q, want to end with %q", i, lines[i], w.endsWith)
 		}
 	}
 	if !strings.Contains(lines[0], "(@)") {
 		t.Errorf("HEAD line should be marked (@): %q", lines[0])
+	}
+}
+
+// dotRuneIndex returns the rune index of the node marker "●" in a rendered row,
+// or -1 if absent. Rune index (not byte index) maps directly to graph column,
+// since box-drawing glyphs are multibyte.
+func dotRuneIndex(line string) int {
+	for i, r := range []rune(line) {
+		if r == '●' {
+			return i
+		}
+	}
+	return -1
+}
+
+// lineFor returns the rendered (ANSI-stripped) row whose metadata contains sub.
+func lineFor(t *testing.T, res core.LogResult, sub string) string {
+	t.Helper()
+	for _, ln := range strings.Split(renderPlain(res), "\n") {
+		if strings.Contains(ln, sub) {
+			return ln
+		}
+	}
+	t.Fatalf("no line containing %q in:\n%s", sub, renderPlain(res))
+	return ""
+}
+
+// TestRenderLogStableColumns checks the core property behind the fixed-column
+// layout: a timeline keeps its horizontal column no matter which timeline is the
+// newest/active one. The offshoot branchB must sit in the same column whether it
+// or the trunk carries the newest state.
+func TestRenderLogStableColumns(t *testing.T) {
+	base := time.Now()
+	mk := func(id, parent string, ageMin int) core.StateInfo {
+		return core.StateInfo{ID: id, Parent: parent, CreatedAt: base.Add(time.Duration(ageMin) * time.Minute)}
+	}
+	root := strings.Repeat("A", 26)
+	child1 := strings.Repeat("B", 26)
+	a := strings.Repeat("C", 26)
+	a2 := strings.Repeat("D", 26)
+	b := strings.Repeat("E", 26)
+	a3 := strings.Repeat("F", 26)
+
+	// branchB (age 4) is the newest state: the trunk holds column 0, branchB its own.
+	bNewest := core.LogResult{
+		Head: b,
+		States: []core.StateInfo{
+			mk(root, "", 0), mk(child1, root, 1), mk(a, child1, 2), mk(a2, a, 3), mk(b, child1, 4),
+		},
+	}
+	// Extend the trunk with branchA3 (age 5) so the trunk now carries the newest
+	// state. branchB is unchanged and must not move.
+	trunkNewest := core.LogResult{
+		Head:   a3,
+		States: append(append([]core.StateInfo{}, bNewest.States...), mk(a3, a2, 5)),
+	}
+
+	// The graph trails the metadata, so measure each node's column relative to where
+	// the graph begins: the always-col-0 root fixes the graph's left edge, and
+	// branchB's "●" must sit one column (two runes) past it. Whichever timeline is
+	// newest, that offset stays 2; only the column-0 lane above branchB changes
+	// (blank when branchB leads, "│" when the trunk's newer tip sits above it).
+	rootShort, bShort := strings.Repeat("A", 7), strings.Repeat("E", 7)
+	for name, res := range map[string]core.LogResult{"branchB newest": bNewest, "trunk newest": trunkNewest} {
+		graphStart := dotRuneIndex(lineFor(t, res, rootShort)) // root is column 0
+		got := lineFor(t, res, bShort)
+		if off := dotRuneIndex(got) - graphStart; off != 2 {
+			t.Errorf("%s: branchB moved column, node %d runes into the graph want 2 in %q", name, off, got)
+		}
 	}
 }
 
@@ -102,7 +175,7 @@ func TestRenderLogFoldsLongRun(t *testing.T) {
 			t.Errorf("expected state %c to be folded away:\n%s", c, out)
 		}
 	}
-	if !strings.Contains(out, "3 snapshots folded") {
+	if !strings.Contains(out, "3 snaps folded") {
 		t.Errorf("expected a fold summary of 3 snaps:\n%s", out)
 	}
 }

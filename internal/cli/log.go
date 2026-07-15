@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 
@@ -80,24 +82,72 @@ func renderLog(w io.Writer, res core.LogResult) {
 	}
 	short := shortLen(ids)
 
+	// labelField renders a state's label plus, for HEAD, the (@) marker that rides in
+	// the same sub-column. It returns the styled text and its display width, so the
+	// column can be both measured and padded from one place.
+	labelField := func(s core.StateInfo) (string, int) {
+		text, w := styleLabel.Render(s.Label), lipgloss.Width(s.Label)
+		if s.ID == res.Head {
+			sep := ""
+			if s.Label != "" {
+				sep = " "
+			}
+			text += sep + styleHeadTag.Render("(@)")
+			w += lipgloss.Width(sep + "(@)")
+		}
+		return text, w
+	}
+
+	// Every field in the metadata column is padded to a fixed width so id, time and
+	// label line up in their own sub-columns. ids are already uniform (short); time
+	// and label vary, so measure the widest of each.
+	timeW, labelW := 0, 0
+	for _, s := range res.States {
+		if w := lipgloss.Width(humanizeSince(s.CreatedAt)); w > timeW {
+			timeW = w
+		}
+		if _, w := labelField(s); w > labelW {
+			labelW = w
+		}
+	}
+	padTo := func(rendered string, plainW, target int) string {
+		if pad := target - plainW; pad > 0 {
+			return rendered + strings.Repeat(" ", pad)
+		}
+		return rendered
+	}
+
 	label := func(s core.StateInfo) string {
 		id := s.ID
 		if len(id) > short {
 			id = id[:short]
 		}
-		out := styleID.Render(id)
-		if s.Label != "" {
-			out += "  " + styleLabel.Render(s.Label)
-		}
-		out += "  " + styleTime.Render(humanizeSince(s.CreatedAt))
-		if s.ID == res.Head {
-			out += "  " + styleHeadTag.Render("(@)")
+		out := padTo(styleID.Render(id), lipgloss.Width(id), short)
+
+		t := humanizeSince(s.CreatedAt)
+		out += " " + padTo(styleTime.Render(t), lipgloss.Width(t), timeW)
+
+		if labelW > 0 { // reserve the label sub-column even for unlabeled rows
+			field, w := labelField(s)
+			out += " " + padTo(field, w, labelW)
 		}
 		return out
 	}
 
-	for _, ln := range foldRuns(layoutGraph(res, byID, childCount, label)) {
-		fmt.Fprintln(w, ln.graph+ln.meta)
+	cols := assignColumns(res.States, byID)
+	lines := foldRuns(layoutGraph(res, byID, childCount, cols, label))
+	// Metadata leads each row, the graph trails it. Pad the metadata to the widest
+	// one so the graph column starts at the same place on every row and the tree
+	// still reads vertically.
+	metaW := 0
+	for _, ln := range lines {
+		if w := lipgloss.Width(ln.meta); w > metaW {
+			metaW = w
+		}
+	}
+	for _, ln := range lines {
+		meta := ln.meta + strings.Repeat(" ", metaW-lipgloss.Width(ln.meta))
+		fmt.Fprintln(w, strings.TrimRight(meta+" "+ln.graph, " "))
 	}
 }
 
@@ -112,34 +162,90 @@ type graphLine struct {
 	col      int
 }
 
-// layoutGraph assigns each state a lane and emits the history's rows newest first.
-// History is a tree, so lanes only ever split; read top-down toward the root those
-// splits appear as merges, and since there are no cross-branch merges the routing
-// stays simple.
+// assignColumns gives every state a fixed horizontal column derived from the tree
+// shape, not from recency, so a timeline keeps its column across renders no matter
+// which one is currently active. The original line is the trunk (column 0): at each
+// branch point the oldest child continues its parent's column, and every offshoot
+// (and every extra root) gets its own column, ordered left-to-right by divergence
+// time. Columns are never recycled, so positions stay put as history grows.
+func assignColumns(states []core.StateInfo, byID map[string]core.StateInfo) map[string]int {
+	earlier := func(a, b core.StateInfo) bool {
+		if a.CreatedAt.Equal(b.CreatedAt) {
+			return a.ID < b.ID
+		}
+		return a.CreatedAt.Before(b.CreatedAt)
+	}
+
+	// children[parent] holds the present children of each state; oldestChild is the
+	// one that continues the parent's column (min CreatedAt, ID as tiebreak).
+	children := make(map[string][]core.StateInfo, len(states))
+	for _, s := range states {
+		if _, ok := byID[s.Parent]; ok {
+			children[s.Parent] = append(children[s.Parent], s)
+		}
+	}
+	oldestChild := func(parent string) (core.StateInfo, bool) {
+		cs := children[parent]
+		if len(cs) == 0 {
+			return core.StateInfo{}, false
+		}
+		best := cs[0]
+		for _, c := range cs[1:] {
+			if earlier(c, best) {
+				best = c
+			}
+		}
+		return best, true
+	}
+
+	// A branch-start is any root or any non-oldest child: it seeds a new column.
+	var starts []core.StateInfo
+	for _, s := range states {
+		if _, ok := byID[s.Parent]; !ok {
+			starts = append(starts, s) // a root
+			continue
+		}
+		if oldest, ok := oldestChild(s.Parent); ok && oldest.ID != s.ID {
+			starts = append(starts, s)
+		}
+	}
+	// Older branches sit to the left; the oldest root lands in column 0.
+	sort.Slice(starts, func(i, j int) bool { return earlier(starts[i], starts[j]) })
+
+	col := make(map[string]int, len(states))
+	for c, start := range starts {
+		// Walk down the oldest-child chain, stamping the whole branch with column c.
+		for cur, ok := start, true; ok; {
+			col[cur.ID] = c
+			cur, ok = oldestChild(cur.ID)
+		}
+	}
+	return col
+}
+
+// layoutGraph emits the history's rows newest first, placing each state in its
+// fixed column (see assignColumns). History is a tree, so lanes only ever split;
+// read top-down toward the root those splits appear as merges, and since there are
+// no cross-branch merges the routing stays simple.
 func layoutGraph(
 	res core.LogResult,
 	byID map[string]core.StateInfo,
 	childCount map[string]int,
+	cols map[string]int,
 	label func(core.StateInfo) string,
 ) []graphLine {
 	order := topoNewestFirst(res.States, byID, childCount)
 
+	maxCol := 0
+	for _, c := range cols {
+		if c > maxCol {
+			maxCol = c
+		}
+	}
 	// lanes[i] is the parent id column i's edge is heading toward, "" when free.
-	lanes := []string{}
-	trimTrailing := func() {
-		for len(lanes) > 0 && lanes[len(lanes)-1] == "" {
-			lanes = lanes[:len(lanes)-1]
-		}
-	}
-	firstFree := func() int {
-		for i, l := range lanes {
-			if l == "" {
-				return i
-			}
-		}
-		lanes = append(lanes, "")
-		return len(lanes) - 1
-	}
+	// Columns are fixed (see assignColumns) and never reused, so the slice never
+	// grows and freed lanes simply stay blank; renderLog trims the trailing ones.
+	lanes := make([]string, maxCol+1)
 	activeCount := func() int {
 		n := 0
 		for _, l := range lanes {
@@ -152,20 +258,16 @@ func layoutGraph(
 
 	var lines []graphLine
 	for _, s := range order {
+		col := cols[s.ID]
 		var myCols []int
 		for i, l := range lanes {
 			if l == s.ID {
 				myCols = append(myCols, i)
 			}
 		}
-		var col int
-		if len(myCols) == 0 {
-			// A tip: start a fresh lane in the leftmost free column.
-			col = firstFree()
+		if len(myCols) == 0 { // a tip: claim its fixed column
 			lanes[col] = s.ID
 			myCols = []int{col}
-		} else {
-			col = myCols[0]
 		}
 		// A branch point: the extra lanes converge into col. Draw the merge, then
 		// free them before the node row so the metadata stays aligned.
@@ -174,7 +276,6 @@ func layoutGraph(
 			for _, j := range myCols[1:] {
 				lanes[j] = ""
 			}
-			trimTrailing()
 		}
 
 		_, hasParent := byID[s.Parent]
@@ -192,7 +293,6 @@ func layoutGraph(
 		} else {
 			lanes[col] = "" // a root ends its lane
 		}
-		trimTrailing()
 	}
 	return lines
 }
@@ -262,7 +362,7 @@ func foldRuns(lines []graphLine) []graphLine {
 			folded := run - foldMax
 			out = append(out, graphLine{
 				graph: drawFold(lines[i].col),
-				meta:  styleTime.Render(fmt.Sprintf("%d %s folded", folded, plural(folded, "snapshot", "snapshots"))),
+				meta:  styleFold.Render(fmt.Sprintf("%d %s folded", folded, plural(folded, "snap", "snaps"))),
 			})
 		} else {
 			out = append(out, lines[i:j]...)
@@ -342,18 +442,10 @@ func drawLink(lanes []string, col int, merge []int) string {
 	return b.String()
 }
 
-// drawFold renders a fold row: a dotted marker in the run's (single) lane.
+// drawFold renders a fold row: a dotted marker in the run's (single) lane, blank
+// columns to its left.
 func drawFold(col int) string {
-	var b strings.Builder
-	for i := 0; i <= col; i++ {
-		if i == col {
-			b.WriteString(styleConn.Render("┊"))
-		} else {
-			b.WriteString(" ")
-		}
-		b.WriteString(" ")
-	}
-	return b.String()
+	return strings.Repeat("  ", col) + styleConn.Render("┊") + " "
 }
 
 // shortLen returns the smallest prefix length (at least 7) that keeps every id

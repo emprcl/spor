@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/signal"
 	"strings"
@@ -118,7 +119,28 @@ func runWatchLive(ctx context.Context, eng *core.Engine, root string, f *os.File
 		}
 	}()
 
+	// A slow heartbeat breathes the header dot so the watcher visibly keeps working
+	// even when nothing is changing. It only rewrites the heartbeat cell, so it
+	// never reads the tree and cannot disturb the view.
+	pulseCtx, stopPulse := context.WithCancel(ctx)
+	pulseDone := make(chan struct{})
+	go func() {
+		defer close(pulseDone)
+		t := time.NewTicker(100 * time.Millisecond)
+		defer t.Stop()
+		for {
+			select {
+			case <-pulseCtx.Done():
+				return
+			case <-t.C:
+				v.tick()
+			}
+		}
+	}()
+
 	runErr := w.Run(ctx)
+	stopPulse()
+	<-pulseDone
 	stopPoll()
 	<-pollDone
 	if runErr != nil {
@@ -152,6 +174,7 @@ type liveView struct {
 	status    string // transient activity note (e.g. "settling...")
 	errMsg    string // last error, shown until the next successful snapshot
 	lastFrame string // last frame written, to skip redundant repaints
+	lastPulse string // last heartbeat cell written, to skip redundant writes
 }
 
 // enter switches to the alternate screen and hides the cursor.
@@ -222,7 +245,9 @@ func (v *liveView) repaintLocked(ctx context.Context) {
 		height = len(tree) + 5
 	}
 
-	header := v.style(styleWatchBanner.Render("watching ") + styleWatchPath.Render(v.root))
+	// The first cell is reserved for the heartbeat dot (see writePulse); it is a
+	// constant space here so the frame dedup keys on the tree, not the heartbeat.
+	header := v.style(styleWatchBanner.Render("  watching ") + styleWatchPath.Render(v.root))
 	hint := v.style(styleWatchHint.Render("recording changes as they happen. press Ctrl+C to stop."))
 	footer := v.footer()
 
@@ -257,6 +282,43 @@ func (v *liveView) repaintLocked(ctx context.Context) {
 	}
 	v.lastFrame = s
 	_, _ = io.WriteString(v.f, s)
+	// The frame reset the reserved cell to a space; force the heartbeat to repaint
+	// so the header is never briefly blank.
+	v.lastPulse = ""
+	v.writePulse()
+}
+
+// pulseDot is the watch heartbeat: a dot whose brightness breathes on a slow cycle
+// (see stylePulse), so the watcher looks alive without the busy feel of a spinner.
+func pulseDot() string {
+	const periodMS = 2000
+	phase := float64(time.Now().UnixMilli()%periodMS) / periodMS // 0..1 over the cycle
+	b := (1 - math.Cos(2*math.Pi*phase)) / 2                     // ease smoothly 0→1→0
+	return stylePulse[int(b*float64(len(stylePulse)-1)+0.5)].Render("●")
+}
+
+// tick advances the header heartbeat between full repaints, giving the watcher a
+// visible sign of life even while the project is idle.
+func (v *liveView) tick() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.writePulse()
+}
+
+// writePulse paints the current heartbeat dot into the header's first cell. It
+// homes the cursor and writes one glyph, skipped when the dot is unchanged, so it
+// is cheap and cannot flicker the tree below. The caller must hold v.mu; it no-ops
+// once the alternate screen is restored.
+func (v *liveView) writePulse() {
+	if v.left {
+		return
+	}
+	dot := v.style(pulseDot())
+	if dot == v.lastPulse {
+		return
+	}
+	v.lastPulse = dot
+	_, _ = io.WriteString(v.f, "\x1b[H"+dot)
 }
 
 // footer returns the status/error line, downsampled to the terminal profile, or

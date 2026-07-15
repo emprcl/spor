@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"image/color"
 	"os"
 	"sync"
@@ -28,8 +29,10 @@ var (
 	styleTime, styleWatchHint, styleStatusKey, styleDiffMeta lipgloss.Style
 	// secondary: state ids and paths.
 	styleID, styleWatchPath lipgloss.Style
-	// faint: history-tree connectors.
-	styleConn lipgloss.Style
+	// faint: history-tree connectors and the folded-run summary.
+	styleConn, styleFold lipgloss.Style
+	// stylePulse is the dim→bright ramp for the watch heartbeat dot (see pulseDot).
+	stylePulse []lipgloss.Style
 )
 
 var themeOnce sync.Once
@@ -123,5 +126,26 @@ func applyPalette(p palette) {
 	secondary := fg(p.secondary)
 	styleID, styleWatchPath = secondary, secondary
 
-	styleConn = fg(p.faint)
+	styleConn, styleFold = fg(p.faint), fg(p.faint)
+
+	// A breathing ramp from muted (dim) to accent (bright): the heartbeat dot never
+	// vanishes but gently pulses. Both ends come from the resolved palette, so it
+	// adapts to the terminal background like everything else.
+	const pulseSteps = 12
+	stylePulse = make([]lipgloss.Style, pulseSteps)
+	for i := range stylePulse {
+		t := float64(i) / float64(pulseSteps-1)
+		stylePulse[i] = fg(lerpColor(p.muted, p.accent, t))
+	}
+}
+
+// lerpColor blends a→b in RGB by t in [0,1], returning a hex color. The palette
+// colors are opaque, so the alpha channel is ignored.
+func lerpColor(a, b color.Color, t float64) color.Color {
+	ar, ag, ab, _ := a.RGBA()
+	br, bg, bb, _ := b.RGBA()
+	mix := func(x, y uint32) uint8 {
+		return uint8(float64(x>>8)*(1-t) + float64(y>>8)*t + 0.5)
+	}
+	return lipgloss.Color(fmt.Sprintf("#%02X%02X%02X", mix(ar, br), mix(ag, bg), mix(ab, bb)))
 }
