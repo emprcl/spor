@@ -202,8 +202,7 @@ Just be kind, inclusive, and patient. We're all here to learn and build
 something cool together.
 
 How to contribute:
-  1) Start with a [discussion](https://github.com/emprcl/spor/discussions) or
-     [open an issue](https://github.com/emprcl/spor/issues) to report a bug or
+  1) [Open an issue](https://github.com/emprcl/spor/issues) to report a bug or
      suggest an enhancement. **Please check if one already exists on the same
      topic first.**
   2) Open a [Pull Request](https://github.com/emprcl/spor/pulls). Please keep
