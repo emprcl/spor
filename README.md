@@ -6,6 +6,11 @@ Spor is a versioning tool for exploratory work, for when you're trying things ou
 backtracking, and changing direction without a plan mapped out in advance, and 
 you don't want to lose where you've been.
 
+**_Spor is a work-in-progress. The command surface and on-disk format should not
+be considered stable until 1.0._**
+
+_Feel free to [open an issue](https://github.com/emprcl/spor/issues/new)._
+
 <p align="center">
   <img src="/docs/screenshot.png" width="50%">
 </p>
@@ -20,9 +25,6 @@ whole project.
 Everything is automatic and local. Spor records your history as an immutable
 graph of snapshots as you work, storing each unique file once (deduplicated and
 compressed), so returning to any moment is instant and nothing is ever lost.
-
-It's especially suited to exploratory work, when you're trying things out,
-backtracking, and changing direction without a plan mapped out in advance.
 
 Spor was built with creative coding workflows in mind first, but we think the
 same shape, explore, backtrack, don't lose anything, shows up in a lot of other
@@ -39,11 +41,6 @@ A few workflows it might fit well:
   scrapped version without keeping fifteen file copies.
 - **Data & research notebooks**: exploratory analysis where you want to backtrack
   after a dead-end path.
-
-**_Spor is a work-in-progress. The command surface and on-disk format should not
-be considered stable until 1.0._**
-
-_Feel free to [open an issue](https://github.com/emprcl/spor/issues/new)._
 
 ## Installation
 
