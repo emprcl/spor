@@ -20,7 +20,9 @@ func newSnapCmd() *cobra.Command {
 		Long: "Record the current contents of your project as a new snapshot you can jump " +
 			"back to later. If nothing has changed since the last one, nothing is " +
 			"recorded. This is the manual path: you only need it when 'spor watch' " +
-			"isn't running, since the watcher records everything automatically.",
+			"isn't running, since the watcher records everything automatically.\n\n" +
+			"Files matched by .sporignore, or by spor's built-in defaults (build " +
+			"artifacts, editor temp files, .git), are never recorded.",
 		Example: `  # Record the current state
   spor snap
 

@@ -31,7 +31,9 @@ func newWatchCmd() *cobra.Command {
 			"settles after a change, so you never have to snapshot by hand. This is the " +
 			"everyday way to use spor: start it and leave it running while you work. " +
 			"The history is shown live, updating as snapshots appear. Press Ctrl+C to " +
-			"stop watching (recording stops with it).",
+			"stop watching (recording stops with it).\n\n" +
+			"Files matched by .sporignore, or by spor's built-in defaults (build " +
+			"artifacts, editor temp files, .git), are never recorded.",
 		Example: `  # Watch and snapshot automatically until you press Ctrl+C
   spor watch`,
 		Args: cobra.NoArgs,

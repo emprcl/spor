@@ -30,7 +30,10 @@ func Root() *cobra.Command {
 			"jump back to any earlier snapshot, or branch off to try something different, " +
 			"all with one command. There is nothing to commit and nothing to stage: it " +
 			"just records as you work. Each save is called a snapshot, and the one you " +
-			"are currently on is written @.",
+			"are currently on is written @.\n\n" +
+			"Some files are never recorded: build artifacts, editor temp files, and .git " +
+			"are skipped by default. Add a .sporignore file at the project root (gitignore " +
+			"syntax) to exclude more, or negate a default with '!' to re-include it.",
 		Example: `  # Watch the project and snapshot automatically as you work
   spor watch
 
