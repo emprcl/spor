@@ -17,12 +17,11 @@ import (
 //
 //  1. the @ / @~n sigils (HEAD and its nth ancestor);
 //  2. an exact label match (so a label named "2h" wins over the duration);
-//  3. a time ("2h ago", the word "ago" optional) resolved against @'s own
-//     timeline;
+//  3. a duration back from now ("2h", "3d") resolved against @'s own timeline;
 //  4. a ULID prefix.
 //
 // It is a pure read and takes no lock. Times are a duration back from now in
-// seconds, minutes, hours, or days ("2h ago", "3d"); calendar dates are out of
+// seconds, minutes, hours, or days ("2h", "3d"); calendar dates are out of
 // scope. Anything not recognized as a time falls through to the ULID-prefix step.
 func (e *Engine) Resolve(ctx context.Context, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
@@ -149,14 +148,12 @@ func resolvePrefix(ref string, states []gen.ListStatesRow) (string, error) {
 	}
 }
 
-// parseTimeRef parses a duration-style time ref such as "2h ago", "90m", or
-// "3d", returning the absolute instant it names. The trailing "ago" is optional
-// (as in the spec's examples). It reports ok == false for anything that is not a
-// recognized non-negative duration, so the caller can fall through to the next
-// ref kind.
+// parseTimeRef parses a duration-style time ref such as "2h", "90m", or "3d",
+// returning the absolute instant it names. It reports ok == false for anything
+// that is not a recognized non-negative duration, so the caller can fall
+// through to the next ref kind.
 func parseTimeRef(ref string) (time.Time, bool) {
 	s := strings.ToLower(strings.TrimSpace(ref))
-	s = strings.TrimSpace(strings.TrimSuffix(s, "ago"))
 	if s == "" {
 		return time.Time{}, false
 	}

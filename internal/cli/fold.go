@@ -22,8 +22,7 @@ func newFoldCmd() *cobra.Command {
 			"lost; only the point before a and b's final contents survive. The range " +
 			"must be a straight line: no snapshot in it may have a branch off to the side. " +
 			"This cannot be undone.\n\n" +
-			"a and b are snapshot refs; a multi-word time ref must be quoted, e.g. " +
-			"spor fold \"2h ago\" @.",
+			"a and b are snapshot refs, e.g. spor fold 2h @.",
 		Example: `  # Squash the last five states into one
   spor fold @~5 @
 

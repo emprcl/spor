@@ -13,8 +13,7 @@ import (
 
 // newLabelCmd builds `spor label`, which lists labels with no arguments and
 // names a state with `<ref> <name>` (docs/design-spec.md §6). The no-arg listing form
-// mirrors `git tag`. A multi-word ref (a time like "2h ago") must be quoted, so
-// it stays a single argument.
+// mirrors `git tag`.
 func newLabelCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "label [<ref> <name>]",
@@ -27,7 +26,7 @@ func newLabelCmd() *cobra.Command {
   spor label @ v1.0
 
   # Name the state from 2 hours ago
-  spor label "2h ago" milestone
+  spor label 2h milestone
 
   # List all labels
   spor label`,

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/emprcl/spor/internal/lock"
 )
@@ -29,7 +30,7 @@ func TestForgetRemovesStoreKeepsFiles(t *testing.T) {
 		t.Errorf("Bytes = %d, want > 0", stats.Bytes)
 	}
 
-	if err := eng.Forget(); err != nil {
+	if err := eng.Forget(ctx); err != nil {
 		t.Fatalf("Forget: %v", err)
 	}
 
@@ -55,10 +56,50 @@ func TestForgetRefusesWithWatcher(t *testing.T) {
 	}
 	defer func() { _ = wl.Release() }()
 
-	if err := eng.Forget(); !errors.Is(err, lock.ErrWatcherRunning) {
+	if err := eng.Forget(context.Background()); !errors.Is(err, lock.ErrWatcherRunning) {
 		t.Fatalf("Forget with watcher = %v, want ErrWatcherRunning", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, storageDir)); err != nil {
 		t.Errorf("store should remain after a refused forget: %v", err)
+	}
+}
+
+// TestForgetWaitsForWriteLock checks that forget serializes behind the write
+// lock, so it cannot delete the store out from under an in-flight mutating
+// operation from another front-end.
+func TestForgetWaitsForWriteLock(t *testing.T) {
+	eng, root := newTestEngine(t)
+	ctx := context.Background()
+	write(t, root, "a.txt", "x")
+	snap(t, eng)
+
+	wl, err := lock.AcquireWrite(ctx, filepath.Join(root, storageDir, "write.lock"))
+	if err != nil {
+		t.Fatalf("AcquireWrite: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- eng.Forget(ctx) }()
+
+	select {
+	case err := <-done:
+		t.Fatalf("Forget completed while the write lock was held: %v", err)
+	case <-time.After(200 * time.Millisecond):
+		// Still blocked, as it should be.
+	}
+
+	if err := wl.Release(); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Forget after lock release: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Forget still blocked after the write lock was released")
+	}
+	if _, err := os.Stat(filepath.Join(root, storageDir)); !os.IsNotExist(err) {
+		t.Errorf("store still present after forget: err=%v", err)
 	}
 }

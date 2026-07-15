@@ -59,7 +59,7 @@ func TestResolveLabelBeatsTime(t *testing.T) {
 	}
 }
 
-// TestResolveTimeIsNowRelative checks the wall-clock plumbing: "0s ago" is now,
+// TestResolveTimeIsNowRelative checks the wall-clock plumbing: "0s" is now,
 // so it resolves to HEAD, while a cutoff before any state exists errors.
 func TestResolveTimeIsNowRelative(t *testing.T) {
 	eng, root := newTestEngine(t)
@@ -72,8 +72,8 @@ func TestResolveTimeIsNowRelative(t *testing.T) {
 		t.Fatalf("Resolve(0s) = %s (err %v), want HEAD %s", got, err, b)
 	}
 	// A cutoff an hour before these just-created states matches nothing.
-	if _, err := eng.Resolve(ctx, "1h ago"); err == nil {
-		t.Fatal("Resolve(1h ago) with only just-created states should error")
+	if _, err := eng.Resolve(ctx, "1h"); err == nil {
+		t.Fatal("Resolve(1h) with only just-created states should error")
 	}
 }
 
@@ -114,9 +114,8 @@ func TestResolveTimeRewindsTimeline(t *testing.T) {
 	}
 }
 
-// TestParseTimeRef covers the accepted time units (s, m, h, d), the optional
-// "ago", and rejection of non-time refs so they fall through to the id-prefix
-// step.
+// TestParseTimeRef covers the accepted time units (s, m, h, d) and rejection of
+// non-time refs so they fall through to the id-prefix step.
 func TestParseTimeRef(t *testing.T) {
 	now := time.Now()
 	cases := []struct {
@@ -125,14 +124,14 @@ func TestParseTimeRef(t *testing.T) {
 		ok   bool
 	}{
 		{"0s", 0, true},
-		{"45s ago", 45 * time.Second, true},
+		{"45s", 45 * time.Second, true},
 		{"90m", 90 * time.Minute, true},
-		{"2h ago", 2 * time.Hour, true},
+		{"2h", 2 * time.Hour, true},
 		{"1h30m", 90 * time.Minute, true},
 		{"3d", 3 * 24 * time.Hour, true},
-		{"1d ago", 24 * time.Hour, true},
 		{"1.5d", 36 * time.Hour, true},
 		{"yesterday", 0, false},
+		{"2h ago", 0, false}, // the "ago" suffix is not part of the grammar
 		{"", 0, false},
 		{"01ARZ", 0, false}, // a ULID-ish prefix is not a time
 		{"5", 0, false},     // a bare number has no unit

@@ -36,7 +36,7 @@ func Root() *cobra.Command {
 
   # See the history, then jump back to how things were 2 hours ago
   spor log
-  spor go 2h ago
+  spor go 2h
 
   # Save one snapshot by hand (only needed when watch isn't running)
   spor snap`,
@@ -71,11 +71,12 @@ func Root() *cobra.Command {
 	}
 
 	addGroup(groupEveryday,
-		newWatchCmd(), newSnapCmd(), newLogCmd(), newUndoCmd(), newRedoCmd(), newGoCmd())
+		newWatchCmd(), newSnapCmd(), newLogCmd(), newUndoCmd(), newRedoCmd(), newGoCmd(),
+		newPickCmd())
 	addGroup(groupInspect,
 		newLabelCmd(), newDiffCmd(), newStatusCmd())
 	addGroup(groupHistory,
-		newDropfromCmd(), newKeepfromCmd(), newFoldCmd())
+		newDropCmd(), newTrimCmd(), newFoldCmd())
 	addGroup(groupStartOver,
 		newForgetCmd())
 	addGroup(groupMaintenance,

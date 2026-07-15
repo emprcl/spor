@@ -67,7 +67,7 @@ func newForgetCmd() *cobra.Command {
 				}
 			}
 
-			if err := eng.Forget(); err != nil {
+			if err := eng.Forget(ctx); err != nil {
 				return err
 			}
 			fmt.Fprintf(out, "Deleted the spor store; %s is no longer tracked.\n", root)

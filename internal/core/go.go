@@ -85,7 +85,7 @@ func (e *Engine) goToLocked(ctx context.Context, target string) (GoResult, error
 
 // materializeTo writes target's manifest into the working tree and points HEAD at
 // it, without force-settling first (the caller decides whether to settle). It is
-// the shared tail of restore and of the HEAD relocation dropfrom/keepfrom perform when
+// the shared tail of restore and of the HEAD relocation drop/trim perform when
 // the current branch is about to be dropped. The caller must hold the write lock.
 // The post-settle HEAD manifest is the authority for which files to delete, so
 // callers that need the working tree to match HEAD should settle beforehand.

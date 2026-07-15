@@ -28,7 +28,7 @@ func (e *Engine) GC(ctx context.Context) (GCResult, error) {
 }
 
 // gcLocked is GC's mark-sweep body, assuming the caller already holds the write
-// lock. Dropfrom, keepfrom, and fold run it after removing states so newly
+// lock. Drop, trim, and fold run it after removing states so newly
 // unreferenced blobs are reclaimed in the same locked operation (docs/design-spec.md §8).
 func (e *Engine) gcLocked(ctx context.Context) (GCResult, error) {
 	referenced, err := e.referencedBlobHashes(ctx)

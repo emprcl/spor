@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -36,9 +37,20 @@ func (e *Engine) ForgetStats(ctx context.Context) (ForgetResult, error) {
 // Forget removes the entire store (docs/design-spec.md §5): every state, all history,
 // and all blobs. Working files are never touched; only the .spor directory is
 // removed. It refuses while a watcher is running, then closes the database and
-// deletes the store. The engine must not be used afterwards (Close is idempotent,
-// so a deferred Close is harmless).
-func (e *Engine) Forget() error {
+// deletes the store, all under the write lock. The engine must not be used
+// afterwards (Close is idempotent, so a deferred Close is harmless).
+func (e *Engine) Forget(ctx context.Context) error {
+	// The write lock serializes forget against in-flight mutating operations from
+	// other front-ends (a snap or go mid-commit holds only this lock, not the
+	// watcher lock), so the store is never deleted under a running write. Held
+	// through the RemoveAll: flock follows the open descriptor, so releasing
+	// after the file is gone is safe.
+	wl, err := lock.AcquireWrite(ctx, e.writeLockPath())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = wl.Release() }()
+
 	running, err := e.WatcherRunning()
 	if err != nil {
 		return err
@@ -55,11 +67,16 @@ func (e *Engine) Forget() error {
 	return nil
 }
 
-// dirSize sums the sizes of all files under root.
+// dirSize sums the sizes of all files under root. A file that vanishes mid-walk
+// is skipped, not an error: readers measure the live store while a concurrent
+// snap creates and renames temp blobs.
 func dirSize(root string) (int64, error) {
 	var total int64
 	err := filepath.WalkDir(root, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
 			return err
 		}
 		if d.IsDir() {
@@ -67,6 +84,9 @@ func dirSize(root string) (int64, error) {
 		}
 		info, err := d.Info()
 		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
 			return err
 		}
 		total += info.Size()

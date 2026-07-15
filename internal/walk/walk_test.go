@@ -85,6 +85,48 @@ func TestWalkIgnoresGitByDefault(t *testing.T) {
 	}
 }
 
+// TestWalkIgnoresDerivedDirsByDefault checks that the common huge derived
+// directories are ignored out of the box, and that a .sporignore negation can
+// re-include one.
+func TestWalkIgnoresDerivedDirsByDefault(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "main.go", "package main")
+	writeFile(t, root, "node_modules/left-pad/index.js", "x")
+	writeFile(t, root, "build/out.bin", "x")
+	writeFile(t, root, "dist/bundle.js", "x")
+	writeFile(t, root, "target/debug/app", "x")
+	writeFile(t, root, "__pycache__/mod.pyc", "x")
+	writeFile(t, root, ".venv/bin/python", "x")
+
+	files, err := Walk(root)
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	var got []string
+	for _, f := range files {
+		got = append(got, f.Rel)
+	}
+	want := []string{"main.go"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Walk = %v, want %v", got, want)
+	}
+
+	// A project that really does keep sources in one of these can re-include it.
+	writeFile(t, root, ".sporignore", "!build/\n")
+	files, err = Walk(root)
+	if err != nil {
+		t.Fatalf("Walk with negation: %v", err)
+	}
+	got = nil
+	for _, f := range files {
+		got = append(got, f.Rel)
+	}
+	want = []string{".sporignore", "build/out.bin", "main.go"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Walk with negation = %v, want %v", got, want)
+	}
+}
+
 func TestWalkNegationReincludes(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "scratch.tmp", "a") // ignored by the *.tmp default

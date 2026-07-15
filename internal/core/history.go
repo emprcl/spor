@@ -8,7 +8,7 @@ import (
 )
 
 // stateGraph is an in-memory view of the state tree, used by the history-editing
-// operations (dropfrom, keepfrom) to compute subtrees and safe deletion orders.
+// operations (drop, trim) to compute subtrees and safe deletion orders.
 type stateGraph struct {
 	states   []gen.ListStatesRow
 	byID     map[string]gen.ListStatesRow

@@ -144,6 +144,11 @@ func (w *Watcher) readEvents(ctx context.Context) {
 				return
 			}
 			w.log(Event{Kind: Error, Err: err})
+			// A watcher error (typically a kernel event-queue overflow) means
+			// events were dropped, possibly including the last one before the
+			// tree went idle. Mark dirty so a reconciling walk runs; if nothing
+			// actually changed, no-op suppression makes it free.
+			w.markDirty()
 		}
 	}
 }

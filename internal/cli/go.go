@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -11,8 +10,7 @@ import (
 )
 
 // newGoCmd builds `spor go <ref>`, which jumps the working tree back to
-// a past state (docs/design-spec.md §5, §6). Trailing args are joined into the ref, so
-// `spor go 2h ago` works without quoting.
+// a past state (docs/design-spec.md §5, §6).
 func newGoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "go <ref>",
@@ -23,11 +21,11 @@ func newGoCmd() *cobra.Command {
 			"A <ref> picks the snapshot to go to:\n" +
 			"  @~n          n snapshots back from the current one\n" +
 			"  <label>      a snapshot you named with 'snap -l' or 'label'\n" +
-			"  <time>       how long ago, e.g. \"2h ago\" or \"3d\"\n" +
-			"               (units: s, m, h, d; the word \"ago\" is optional)\n" +
+			"  <time>       a duration back from now, e.g. 2h or 3d\n" +
+			"               (units: s, m, h, d)\n" +
 			"  <id>         a snapshot id, or just its first few characters",
 		Example: `  # Jump back to how things were 2 hours ago
-  spor go 2h ago
+  spor go 2h
 
   # Go back 2 states from where you are
   spor go @~2
@@ -37,9 +35,9 @@ func newGoCmd() *cobra.Command {
 
   # Jump to a state you named
   spor go before-refactor`,
-		Args: cobra.MinimumNArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ref := strings.Join(args, " ")
+			ref := args[0]
 
 			root, err := os.Getwd()
 			if err != nil {

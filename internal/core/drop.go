@@ -7,33 +7,33 @@ import (
 	"github.com/emprcl/spor/internal/lock"
 )
 
-// DropfromPlan previews what a dropfrom would destroy, for the confirmation prompt.
-type DropfromPlan struct {
+// DropPlan previews what a drop would destroy, for the confirmation prompt.
+type DropPlan struct {
 	Target           string
 	StatesToDelete   int
 	HeadWillMove     bool
 	HeadTarget       string // parent id HEAD moves to; "" when it does not move
-	WipesEntireStore bool   // the dropfrom removes every state
+	WipesEntireStore bool   // the drop removes every state
 }
 
-// DropfromPlan resolves ref and reports what pruning it would remove, without
+// DropPlan resolves ref and reports what pruning it would remove, without
 // changing anything.
-func (e *Engine) DropfromPlan(ctx context.Context, ref string) (DropfromPlan, error) {
+func (e *Engine) DropPlan(ctx context.Context, ref string) (DropPlan, error) {
 	target, err := e.Resolve(ctx, ref)
 	if err != nil {
-		return DropfromPlan{}, err
+		return DropPlan{}, err
 	}
 	g, err := e.loadGraph(ctx)
 	if err != nil {
-		return DropfromPlan{}, err
+		return DropPlan{}, err
 	}
 	sub := g.subtree(target)
 	head, err := e.q.GetHead(ctx)
 	if err != nil {
-		return DropfromPlan{}, fmt.Errorf("reading HEAD: %w", err)
+		return DropPlan{}, fmt.Errorf("reading HEAD: %w", err)
 	}
 
-	plan := DropfromPlan{
+	plan := DropPlan{
 		Target:           target,
 		StatesToDelete:   len(sub),
 		WipesEntireStore: len(sub) == len(g.states),
@@ -49,8 +49,8 @@ func (e *Engine) DropfromPlan(ctx context.Context, ref string) (DropfromPlan, er
 	return plan, nil
 }
 
-// DropfromResult reports the outcome of a dropfrom.
-type DropfromResult struct {
+// DropResult reports the outcome of a drop.
+type DropResult struct {
 	Target      string
 	Deleted     int
 	HeadMovedTo string // "" when HEAD did not move
@@ -58,34 +58,34 @@ type DropfromResult struct {
 	Reclaimed   GCResult
 }
 
-// Dropfrom deletes a state and its whole subtree (docs/design-spec.md §5). If HEAD is inside
+// Drop deletes a state and its whole subtree (docs/design-spec.md §5). If HEAD is inside
 // the subtree it is first moved to the target's parent and re-materialized
 // (force-settling so an in-flight edit is not lost); pruning the root you are on
 // clears HEAD and leaves the working tree untouched. The subtree is deleted in one
 // transaction, then a GC sweep reclaims the newly unreferenced blobs, all under
 // the write lock.
-func (e *Engine) Dropfrom(ctx context.Context, ref string) (DropfromResult, error) {
+func (e *Engine) Drop(ctx context.Context, ref string) (DropResult, error) {
 	wl, err := lock.AcquireWrite(ctx, e.writeLockPath())
 	if err != nil {
-		return DropfromResult{}, err
+		return DropResult{}, err
 	}
 	defer func() { _ = wl.Release() }()
 
 	target, err := e.Resolve(ctx, ref)
 	if err != nil {
-		return DropfromResult{}, err
+		return DropResult{}, err
 	}
 	g, err := e.loadGraph(ctx)
 	if err != nil {
-		return DropfromResult{}, err
+		return DropResult{}, err
 	}
 	sub := g.subtree(target)
 
 	head, err := e.q.GetHead(ctx)
 	if err != nil {
-		return DropfromResult{}, fmt.Errorf("reading HEAD: %w", err)
+		return DropResult{}, fmt.Errorf("reading HEAD: %w", err)
 	}
-	res := DropfromResult{Target: target}
+	res := DropResult{Target: target}
 
 	headInSub := false
 	if head.Valid {
@@ -96,14 +96,14 @@ func (e *Engine) Dropfrom(ctx context.Context, ref string) (DropfromResult, erro
 			// Relocate HEAD to the target's parent, force-settling and materializing
 			// so the working tree matches the surviving state.
 			if _, err := e.goToLocked(ctx, parent.String); err != nil {
-				return DropfromResult{}, fmt.Errorf("relocating HEAD before dropfrom: %w", err)
+				return DropResult{}, fmt.Errorf("relocating HEAD before drop: %w", err)
 			}
 			res.HeadMovedTo = parent.String
 			// The force-settle may have recorded a state under the old HEAD (inside
 			// the subtree); reload so it is deleted too.
 			g, err = e.loadGraph(ctx)
 			if err != nil {
-				return DropfromResult{}, err
+				return DropResult{}, err
 			}
 			sub = g.subtree(target)
 		} else {
@@ -115,13 +115,13 @@ func (e *Engine) Dropfrom(ctx context.Context, ref string) (DropfromResult, erro
 
 	order := g.deletionOrder(sub)
 	if err := e.deleteStates(ctx, order); err != nil {
-		return DropfromResult{}, err
+		return DropResult{}, err
 	}
 	res.Deleted = len(order)
 
 	gc, err := e.gcLocked(ctx)
 	if err != nil {
-		return DropfromResult{}, fmt.Errorf("reclaiming blobs: %w", err)
+		return DropResult{}, fmt.Errorf("reclaiming blobs: %w", err)
 	}
 	res.Reclaimed = gc
 	return res, nil

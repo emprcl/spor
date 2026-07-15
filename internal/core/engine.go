@@ -1,5 +1,5 @@
 // Package core is spor's UI-agnostic engine: it owns the store and the
-// operations (snapshot, and later restore/dropfrom/fold/…). Front-ends (the CLI,
+// operations (snapshot, and later restore/drop/fold/…). Front-ends (the CLI,
 // the watcher, a future TUI) are thin callers. See docs/design-spec.md §8.
 package core
 
@@ -246,10 +246,14 @@ func (e *Engine) WatcherRunning() (bool, error) {
 }
 
 // dsn builds the modernc SQLite connection string with the pragmas spor relies
-// on: WAL journaling, a busy timeout, and enforced foreign keys.
+// on: WAL journaling, full synchronous mode, a busy timeout, and enforced
+// foreign keys. WAL's default (NORMAL) can lose the most recent commit on power
+// loss; FULL keeps the state-row-plus-HEAD commit as durable as the blob fsyncs
+// that precede it (docs/design-spec.md §8).
 func dsn(path string) string {
 	return "file:" + path +
 		"?_pragma=journal_mode(WAL)" +
+		"&_pragma=synchronous(FULL)" +
 		"&_pragma=busy_timeout(10000)" +
 		"&_pragma=foreign_keys(on)"
 }

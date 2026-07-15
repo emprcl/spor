@@ -20,10 +20,9 @@ func newDiffCmd() *cobra.Command {
 		Long: "Compare two points in history. With one <ref>, show what changed from " +
 			"that snapshot to the current one (@). With two, compare the first to the " +
 			"second.\n\n" +
-			"diff only ever compares recorded snapshots, never your uncommitted edits. A " +
-			"multi-word time ref must be quoted, e.g. spor diff \"2h ago\".",
+			"diff only ever compares recorded snapshots, never your uncommitted edits.",
 		Example: `  # What changed since 2 hours ago
-  spor diff "2h ago"
+  spor diff 2h
 
   # Compare two named states
   spor diff v1.0 v2.0`,

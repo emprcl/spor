@@ -76,7 +76,7 @@ type FoldResult struct {
 //  4. if HEAD was inside the range, moves it onto C and materializes C's content;
 //  5. deletes the whole range in one transaction, then GC-sweeps.
 //
-// Like dropfrom/keepfrom it is destructive but never rewriting: no surviving state
+// Like drop/trim it is destructive but never rewriting: no surviving state
 // changes, only which states exist and B's children's parent link.
 func (e *Engine) Fold(ctx context.Context, fromRef, toRef string) (FoldResult, error) {
 	wl, err := lock.AcquireWrite(ctx, e.writeLockPath())

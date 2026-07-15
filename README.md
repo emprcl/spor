@@ -17,14 +17,16 @@ _Feel free to [open an issue](https://github.com/emprcl/spor/issues/new)._
 
 It works differently from traditional version control like
 [Git](https://git-scm.com/). There are no commits to write, nothing to stage, no
-branches to manage. Instead, you start `spor watch` and forget about it: Spor
-watches your project and automatically saves a snapshot every time something
-changes. You can jump back to any past moment, pick up from there, and go a
-different way. You can think of it as infinite undo for your whole project.
+branches to manage. Instead, you leave `spor watch` running while you work: it
+automatically saves a snapshot every time something changes (recording stops
+when you stop watching). You can jump back to any past moment, pick up from
+there, and go a different way. You can think of it as infinite undo for your
+whole project.
 
 Everything is automatic and local. Spor records your history as an immutable
 graph of snapshots as you work, storing each unique file once (deduplicated and
-compressed), so returning to any moment is instant and nothing is ever lost.
+compressed). Returning to any moment is fast, and history is only ever removed
+when you explicitly ask for it.
 
 Spor was built with creative coding workflows in mind first, but we think the
 same shape, explore, backtrack, don't lose anything, shows up in a lot of other
@@ -64,14 +66,15 @@ spor snap                # save one snapshot by hand (only needed when watch isn
 # Look around
 spor log                 # show the history, newest first
 spor status              # where you are and how large the history is
-spor diff "2h ago"       # what changed since then
+spor diff 2h             # what changed in the last 2 hours
 spor diff @~3            # what changed in the last 3 snapshots
 
 # Move through history
-spor go 2h ago           # jump back to how things were
+spor go 2h               # jump back to how things were 2 hours ago
 spor go @~2              # or go back two snapshots
 spor go 01ARZ7           # or jump to a specific snapshot by id
 spor undo                # step back one snapshot (redo steps forward)
+spor pick @~2 a.js       # bring back one file, leaving the rest alone
 spor label @ v1          # name a snapshot to return to later
 ```
 

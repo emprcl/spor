@@ -4,20 +4,19 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
 )
 
-// newDropfromCmd builds `spor dropfrom <ref>`, which deletes a state and all its
+// newDropCmd builds `spor drop <ref>`, which deletes a state and all its
 // descendants (docs/design-spec.md §5, §6). It is destructive, so it confirms first and
 // reports exactly what will be removed.
-func newDropfromCmd() *cobra.Command {
+func newDropCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "dropfrom <ref>",
+		Use:   "drop <ref>",
 		Short: "Delete a snapshot and everything after it",
 		Long: "Permanently delete a snapshot and everything that came after it. On the " +
 			"newest snapshot this drops just that one; after an undo it drops the whole " +
@@ -26,16 +25,16 @@ func newDropfromCmd() *cobra.Command {
 			"change to match. This cannot be undone.\n\n" +
 			"A <ref> selects the snapshot; see 'spor go --help' for the forms.",
 		Example: `  # Delete the current state and everything after it
-  spor dropfrom @
+  spor drop @
 
   # Delete a branch by its id
-  spor dropfrom 01ARZ7
+  spor drop 01ARZ7
 
   # Skip the confirmation prompt
-  spor dropfrom @ -y`,
-		Args: cobra.MinimumNArgs(1),
+  spor drop @ -y`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ref := strings.Join(args, " ")
+			ref := args[0]
 			root, err := os.Getwd()
 			if err != nil {
 				return err
@@ -47,7 +46,7 @@ func newDropfromCmd() *cobra.Command {
 			}
 			defer eng.Close()
 
-			plan, err := eng.DropfromPlan(ctx, ref)
+			plan, err := eng.DropPlan(ctx, ref)
 			if err != nil {
 				return err
 			}
@@ -68,7 +67,7 @@ func newDropfromCmd() *cobra.Command {
 				}
 			}
 
-			res, err := eng.Dropfrom(ctx, ref)
+			res, err := eng.Drop(ctx, ref)
 			if err != nil {
 				return err
 			}

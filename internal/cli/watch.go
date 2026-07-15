@@ -29,8 +29,9 @@ func newWatchCmd() *cobra.Command {
 		Short: "Watch the project and snapshot it automatically",
 		Long: "Run in the foreground and record a new snapshot every time the project " +
 			"settles after a change, so you never have to snapshot by hand. This is the " +
-			"everyday way to use spor: start it and forget it. The history is shown " +
-			"live, updating as snapshots appear. Press Ctrl+C to stop watching.",
+			"everyday way to use spor: start it and leave it running while you work. " +
+			"The history is shown live, updating as snapshots appear. Press Ctrl+C to " +
+			"stop watching (recording stops with it).",
 		Example: `  # Watch and snapshot automatically until you press Ctrl+C
   spor watch`,
 		Args: cobra.NoArgs,
@@ -94,7 +95,7 @@ func runWatchLive(ctx context.Context, eng *core.Engine, root string, f *os.File
 		return err
 	}
 
-	// Out-of-band changes (dropfrom, keepfrom, go, undo/redo run from another
+	// Out-of-band changes (drop, trim, go, undo/redo run from another
 	// terminal) mutate the state graph without producing filesystem events, so the
 	// watcher pipeline never fires for them. A low-frequency poll repaints when the
 	// tree has changed; the frame dedup in repaintLocked makes an unchanged poll a

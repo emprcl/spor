@@ -22,9 +22,9 @@ func parentOf(t *testing.T, eng *Engine, id string) string {
 	return s.ParentID.String
 }
 
-// TestKeepfromKeepsSubtreeDropsAncestors reroots to a mid state while HEAD is a
+// TestTrimKeepsSubtreeDropsAncestors reroots to a mid state while HEAD is a
 // descendant: ancestors are dropped, HEAD stays, and the target becomes a root.
-func TestKeepfromKeepsSubtreeDropsAncestors(t *testing.T) {
+func TestTrimKeepsSubtreeDropsAncestors(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 	write(t, root, "f.txt", "A")
@@ -34,17 +34,17 @@ func TestKeepfromKeepsSubtreeDropsAncestors(t *testing.T) {
 	write(t, root, "f.txt", "C")
 	s3 := snap(t, eng) // s1 -> s2 -> s3, HEAD = s3
 
-	plan, err := eng.KeepfromPlan(ctx, s2)
+	plan, err := eng.TrimPlan(ctx, s2)
 	if err != nil {
-		t.Fatalf("KeepfromPlan: %v", err)
+		t.Fatalf("TrimPlan: %v", err)
 	}
 	if plan.StatesToDrop != 1 || plan.StatesKept != 2 || plan.HeadWillMove || plan.IsNoop {
 		t.Fatalf("plan = %+v, want drop 1 keep 2, HEAD staying", plan)
 	}
 
-	res, err := eng.Keepfrom(ctx, s2)
+	res, err := eng.Trim(ctx, s2)
 	if err != nil {
-		t.Fatalf("Keepfrom: %v", err)
+		t.Fatalf("Trim: %v", err)
 	}
 	if res.Dropped != 1 || res.Kept != 2 || res.HeadMovedTo != "" {
 		t.Fatalf("res = %+v, want Dropped 1 Kept 2, HEAD unchanged", res)
@@ -67,9 +67,9 @@ func TestKeepfromKeepsSubtreeDropsAncestors(t *testing.T) {
 	mustVerifyClean(t, eng)
 }
 
-// TestKeepfromRelocatesHeadOnDroppedBranch keeps from a state on a different branch
+// TestTrimRelocatesHeadOnDroppedBranch keeps from a state on a different branch
 // than HEAD: HEAD is moved to the new root and the working tree re-materialized.
-func TestKeepfromRelocatesHeadOnDroppedBranch(t *testing.T) {
+func TestTrimRelocatesHeadOnDroppedBranch(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 	write(t, root, "f.txt", "A")
@@ -82,17 +82,17 @@ func TestKeepfromRelocatesHeadOnDroppedBranch(t *testing.T) {
 	write(t, root, "f.txt", "C")
 	snap(t, eng) // s1 -> {s2, s3}, HEAD = s3
 
-	plan, err := eng.KeepfromPlan(ctx, s2)
+	plan, err := eng.TrimPlan(ctx, s2)
 	if err != nil {
-		t.Fatalf("KeepfromPlan: %v", err)
+		t.Fatalf("TrimPlan: %v", err)
 	}
 	if !plan.HeadWillMove || plan.StatesKept != 1 || plan.StatesToDrop != 2 {
 		t.Fatalf("plan = %+v, want HEAD moving, keep 1 drop 2", plan)
 	}
 
-	res, err := eng.Keepfrom(ctx, s2)
+	res, err := eng.Trim(ctx, s2)
 	if err != nil {
-		t.Fatalf("Keepfrom: %v", err)
+		t.Fatalf("Trim: %v", err)
 	}
 	if res.HeadMovedTo != s2 || res.Kept != 1 || res.Dropped != 2 {
 		t.Fatalf("res = %+v, want HEAD -> %s, keep 1 drop 2", res, s2)
@@ -109,8 +109,8 @@ func TestKeepfromRelocatesHeadOnDroppedBranch(t *testing.T) {
 	mustVerifyClean(t, eng)
 }
 
-// TestKeepfromNoopAtRoot reroots to the root of the whole history: nothing changes.
-func TestKeepfromNoopAtRoot(t *testing.T) {
+// TestTrimNoopAtRoot reroots to the root of the whole history: nothing changes.
+func TestTrimNoopAtRoot(t *testing.T) {
 	eng, root := newTestEngine(t)
 	ctx := context.Background()
 	write(t, root, "f.txt", "A")
@@ -118,17 +118,17 @@ func TestKeepfromNoopAtRoot(t *testing.T) {
 	write(t, root, "f.txt", "B")
 	s2 := snap(t, eng)
 
-	plan, err := eng.KeepfromPlan(ctx, s1)
+	plan, err := eng.TrimPlan(ctx, s1)
 	if err != nil {
-		t.Fatalf("KeepfromPlan: %v", err)
+		t.Fatalf("TrimPlan: %v", err)
 	}
 	if !plan.IsNoop {
 		t.Fatalf("plan = %+v, want IsNoop", plan)
 	}
 
-	res, err := eng.Keepfrom(ctx, s1)
+	res, err := eng.Trim(ctx, s1)
 	if err != nil {
-		t.Fatalf("Keepfrom: %v", err)
+		t.Fatalf("Trim: %v", err)
 	}
 	if res.Dropped != 0 {
 		t.Errorf("Dropped = %d, want 0", res.Dropped)

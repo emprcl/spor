@@ -39,9 +39,11 @@ const StorageDir = ".spor"
 const IgnoreFile = ".sporignore"
 
 // defaultIgnorePatterns are things spor ignores out of the box: editor temp/swap
-// artifacts and the .git directory (high-churn, tool-owned, and meaningless to
-// version). They are applied before .sporignore, so a project can re-include one
-// with a negation (e.g. "!keep.tmp"). Unlike .spor, these are overridable.
+// artifacts, the .git directory (high-churn, tool-owned, and meaningless to
+// version), and the common huge derived directories that would otherwise be
+// swept into the very first snapshot. They are applied before .sporignore, so a
+// project can re-include one with a negation (e.g. "!keep.tmp" or "!build/").
+// Unlike .spor, these are overridable.
 var defaultIgnorePatterns = []byte(`.git/
 .DS_Store
 *~
@@ -49,6 +51,12 @@ var defaultIgnorePatterns = []byte(`.git/
 *.swp
 *.swo
 4913
+node_modules/
+build/
+dist/
+target/
+__pycache__/
+.venv/
 `)
 
 // Walk returns the tracked files under root, sorted by Rel. It always skips
