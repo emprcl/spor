@@ -19,7 +19,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version: 1.26
 
       - name: Run GoReleaser (release on tags, snapshot otherwise)
         uses: goreleaser/goreleaser-action@v7
