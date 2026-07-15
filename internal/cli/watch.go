@@ -28,8 +28,9 @@ func newWatchCmd() *cobra.Command {
 		Use:   "watch",
 		Short: "Watch the project and snapshot it automatically",
 		Long: "Run in the foreground and record a new snapshot every time the project " +
-			"settles after a change, so you never have to snapshot by hand. The history " +
-			"is shown live, updating as snapshots appear. Press Ctrl+C to stop watching.",
+			"settles after a change, so you never have to snapshot by hand. This is the " +
+			"everyday way to use spor: start it and forget it. The history is shown " +
+			"live, updating as snapshots appear. Press Ctrl+C to stop watching.",
 		Example: `  # Watch and snapshot automatically until you press Ctrl+C
   spor watch`,
 		Args: cobra.NoArgs,

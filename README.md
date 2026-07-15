@@ -2,9 +2,9 @@
 
 :notebook: **[Design Specification](docs/design-spec.md)**
 
-Spor is a versioning tool for exploratory work, for when you're trying things out,
-backtracking, and changing direction without a plan mapped out in advance, and 
-you don't want to lose where you've been.
+Spor is a simple, automatic versioning tool for exploratory work, for when
+you're trying things out, backtracking, and changing direction without a plan
+mapped out in advance, and you don't want to lose where you've been.
 
 **_Spor is a work-in-progress. The command surface and on-disk format should not
 be considered stable until 1.0._**
@@ -17,10 +17,10 @@ _Feel free to [open an issue](https://github.com/emprcl/spor/issues/new)._
 
 It works differently from traditional version control like
 [Git](https://git-scm.com/). There are no commits to write, nothing to stage, no
-branches to manage. Instead, Spor watches your project and automatically saves a
-snapshot every time something changes. You can jump back to any past moment, pick
-up from there, and go a different way: think of it as infinite undo for your
-whole project.
+branches to manage. Instead, you start `spor watch` and forget about it: Spor
+watches your project and automatically saves a snapshot every time something
+changes. You can jump back to any past moment, pick up from there, and go a
+different way. You can think of it as infinite undo for your whole project.
 
 Everything is automatic and local. Spor records your history as an immutable
 graph of snapshots as you work, storing each unique file once (deduplicated and
@@ -58,13 +58,14 @@ first snapshot creates Spor's store automatically.
 
 ```sh
 # Record snapshots
-spor snap                # save a snapshot of the project now
 spor watch               # save automatically as you work (Ctrl+C to stop)
+spor snap                # save one snapshot by hand (only needed when watch isn't running)
 
 # Look around
 spor log                 # show the history, newest first
 spor status              # where you are and how large the history is
 spor diff "2h ago"       # what changed since then
+spor diff @~3            # what changed in the last 3 snapshots
 
 # Move through history
 spor go 2h ago           # jump back to how things were

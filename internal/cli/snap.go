@@ -16,10 +16,11 @@ func newSnapCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "snap",
-		Short: "Save a snapshot of the current project",
+		Short: "Save one snapshot by hand",
 		Long: "Record the current contents of your project as a new snapshot you can jump " +
 			"back to later. If nothing has changed since the last one, nothing is " +
-			"recorded. This is the manual alternative to leaving 'spor watch' running.",
+			"recorded. This is the manual path: you only need it when 'spor watch' " +
+			"isn't running, since the watcher records everything automatically.",
 		Example: `  # Record the current state
   spor snap
 

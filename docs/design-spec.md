@@ -21,10 +21,10 @@ complete contents of the project at one moment.
 
 Experience:
 
-- States are created by a single **snapshot** operation, triggered either
-  manually (`spor snap`) or automatically by a watcher that runs while
-  `spor watch` is open. Either way the user never writes a commit message or
-  stages anything.
+- States are created by a single **snapshot** operation, triggered
+  automatically by a watcher that runs while `spor watch` is open, or manually
+  (`spor snap`) when no watcher is running. Either way the user never writes a
+  commit message or stages anything.
 - Recording happens *while `spor` is running*, in the foreground; closing it
   stops watching. There is no hidden background daemon.
 - Restoring an old state is one command.
@@ -185,10 +185,11 @@ for free.
 
 Two triggers call it:
 
+- **Automatic**: the watcher calls it when the filesystem settles (below).
+  This is the everyday path.
 - **Manual**: `spor snap` runs it once and exits. spor is fully usable this
   way with no watcher (a deliberate, git-like rhythm; also what makes it
   scriptable and testable).
-- **Automatic**: the watcher calls it when the filesystem settles (below).
 
 **No-op suppression** is part of the operation: if the new manifest hash equals
 `HEAD`'s, no state is created. So repeated snapshots with nothing changed,
@@ -447,7 +448,7 @@ well defined even after a restore to an old state.
 | Command | Effect |
 |---|---|
 | `spor watch` | run the watcher in the foreground, showing the history repainting live as states appear (the same view as `spor log`); Ctrl+C stops watching |
-| `spor snap [-l <label>]` | create one state now, then exit; the watcher-free, scriptable path |
+| `spor snap [-l <label>]` | create one state now, then exit; the manual, scriptable path, only needed when `spor watch` isn't running |
 | `spor log` | show the history newest-first as **swimlanes**: each branch keeps its own column, and long linear runs are folded to their most recent few; marks `@` |
 | `spor undo [n]` / `spor redo [n]` | step back / forward `n` states (clamped to the history boundary) |
 | `spor go <ref>` | jump to any state |

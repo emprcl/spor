@@ -31,15 +31,15 @@ func Root() *cobra.Command {
 			"all with one command. There is nothing to commit and nothing to stage: it " +
 			"just records as you work. Each save is called a snapshot, and the one you " +
 			"are currently on is written @.",
-		Example: `  # Save a snapshot of the current state
-  spor snap
-
-  # Watch the project and snapshot automatically as you work
+		Example: `  # Watch the project and snapshot automatically as you work
   spor watch
 
   # See the history, then jump back to how things were 2 hours ago
   spor log
-  spor go 2h ago`,
+  spor go 2h ago
+
+  # Save one snapshot by hand (only needed when watch isn't running)
+  spor snap`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Detect the terminal background and build the palette once, before any
