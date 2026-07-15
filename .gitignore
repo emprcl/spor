@@ -30,6 +30,9 @@ go.work.sum
 # spor files
 .spor
 
+bin
+dist/
+
 # Editor/IDE
 # .idea/
 # .vscode/

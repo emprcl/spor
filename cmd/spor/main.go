@@ -11,11 +11,16 @@ import (
 	"github.com/emprcl/spor/internal/cli"
 )
 
+// version is set via -ldflags "-X main.version=..." by goreleaser; it stays
+// "dev" for a plain `go build` or `go run`.
+var version = "dev"
+
 func main() {
 	if err := fang.Execute(
 		context.Background(),
 		cli.Root(),
 		fang.WithColorSchemeFunc(cli.HelpColorScheme),
+		fang.WithVersion(version),
 	); err != nil {
 		os.Exit(1)
 	}
