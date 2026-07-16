@@ -79,7 +79,7 @@ func Root() *cobra.Command {
 	addGroup(groupInspect,
 		newLabelCmd(), newDiffCmd(), newStatusCmd())
 	addGroup(groupHistory,
-		newDropCmd(), newTrimCmd(), newFoldCmd())
+		newDropCmd(), newTrimCmd(), newFoldCmd(), newThinCmd())
 	addGroup(groupStartOver,
 		newForgetCmd())
 	addGroup(groupMaintenance,

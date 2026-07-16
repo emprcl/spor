@@ -181,10 +181,12 @@ spor pick @~4 config.yaml
 If you took a wrong turn, `spor undo` (and `spor redo`) step you back and
 forth one snapshot at a time, no `<ref>` needed. And once a direction is
 clearly done, `spor drop <ref>` permanently deletes it and everything after
-it, `spor trim <ref>` throws away everything before a point, and
-`spor fold <a> <b>` squashes a noisy run of snapshots into one, if you want to
-tidy up before sharing. If you ever want a clean slate, `spor forget` wipes
-Spor's history for the project, keeping your files exactly as they are.
+it, `spor trim <ref>` throws away everything before a point,
+`spor fold <a> <b>` squashes a noisy run of snapshots into one, and
+`spor thin` collapses every linear run at once, keeping only your tips, branch
+points, and named snapshots, if you want to tidy up before sharing. If you ever
+want a clean slate, `spor forget` wipes Spor's history for the project, keeping
+your files exactly as they are.
 
 That's the whole workflow: watch, work, and reach back into history whenever
 you need to. See the full command reference below, or `spor --help` /
@@ -221,6 +223,7 @@ you need to. See the full command reference below, or `spor --help` /
 | `spor drop <ref>` | permanently delete a snapshot and everything after it |
 | `spor trim <ref>` | permanently drop everything before a snapshot, keeping it and what follows |
 | `spor fold <a> <b>` | squash the run of snapshots from `a` to `b` into one |
+| `spor thin` | collapse linear runs across the whole history, keeping only tips, branch points, and named snapshots |
 
 **Starting over**
 

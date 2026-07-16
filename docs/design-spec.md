@@ -313,7 +313,7 @@ burst or a project-wide save-all.
 ## 5. Operations
 
 All operations produce or remove whole states. History editing (drop, trim,
-fold) is **destructive but never rewriting**: it removes states from the tree
+fold, thin) is **destructive but never rewriting**: it removes states from the tree
 but never alters what a surviving state contains. They all rely on opaque State IDs
 (no ID cascade on re-parent) and on GC (§8) to reclaim now-unreferenced blobs.
 
@@ -389,6 +389,28 @@ Given ancestor `A` and descendant `B`:
 
 Intermediate snapshots are intentionally lost; only the start boundary
 (`parent(A)`) and final contents (`C`) survive.
+
+### Thin: reduce history to its skeleton
+
+The persistent form of the folding `spor log` already does at display time (§6):
+where fold squashes one range you name, thin collapses **every** linear run at
+once, across the whole tree. It keeps only the structurally significant states,
+every **tip** (no children) and **branch point** (two or more children), plus
+every **labeled** state and **`HEAD`** (the same states `log` never folds
+away), and drops the linear in-between states.
+
+1. Compute the keep-set (tips, branch points, labels, `HEAD`); everything else,
+   an unlabeled non-`HEAD` state with exactly one child, is dropped.
+2. Reparent each survivor whose parent is dropped onto its nearest surviving
+   ancestor (or to a root when the whole chain above it is dropped).
+3. Delete the dropped states in one transaction, children before parents; GC sweep.
+
+Because `HEAD` is always kept, thin never moves `HEAD` and never touches the
+working tree, so unlike drop/trim/fold it needs no force-settle. Like them it is
+destructive but never rewriting: no surviving state's contents change, only
+which states exist and the survivors' parent links. It is idempotent (a second
+run finds only tips and branch points, plus labels and `HEAD`, and drops
+nothing). A purely linear history collapses to its latest state.
 
 ### Forget: remove the store entirely
 
@@ -501,6 +523,7 @@ working tree.
 | `spor drop <ref>` | delete a state **and all its descendants**; HEAD moves to its parent |
 | `spor trim <ref>` | make a state the new root, dropping everything **not** under it (the dual of drop) |
 | `spor fold <a> <b>` | squash the linear range `a`…`b` into one state |
+| `spor thin` | reduce the whole history to its tips, branch points, and labels, dropping the linear runs (`HEAD` and the working tree never move) |
 
 `drop` and `undo` look identical when `@` is a leaf but are not the same:
 `undo` is a reversible cursor move, `drop @` **destroys** the state:
@@ -595,7 +618,7 @@ corrupted; only the single state being created during a crash may be lost.
 
 There is **no daemon.** All behavior lives in a UI-agnostic **core engine** (a
 Go package) owning the operations (snap, go, drop, trim,
-fold, gc, diff, log, label, verify, forget), ref resolution, and locking. Three unprivileged
+fold, thin, gc, diff, log, label, verify, forget), ref resolution, and locking. Three unprivileged
 front-ends call it:
 
 - **One-shot CLI** (`spor snap`, `spor go`, …): open store, call one
@@ -720,7 +743,7 @@ manifest is well-formed and its stored hash recomputes; every `parent` and
 The core is implemented: recording (manual `snap` and the `watch` watcher), the
 stat cache, ignore rules (built-in defaults plus root `.sporignore`), the
 zstd-compressed content-addressed blob store, the state tree and HEAD journal,
-`go` / `undo` / `redo`, `pick`, `drop` / `trim` / `fold`, `label`, `diff`, `log`
+`go` / `undo` / `redo`, `pick`, `drop` / `trim` / `fold` / `thin`, `label`, `diff`, `log`
 (newest-first swimlanes with folding), `status`, `verify`, `gc`, `forget`,
 advisory file locking, schema versioning and migrations, crash-safe write
 ordering with an on-open consistency check, and concurrent readers alongside the
