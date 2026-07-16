@@ -55,6 +55,19 @@ func (s *Store) Has(hash string) bool {
 // content-addressed path and returns the hash. If the blob already exists it is
 // not rewritten (dedup). The write is durable: fsync before rename.
 func (s *Store) Put(r io.Reader) (hash string, err error) {
+	return s.put(r, false)
+}
+
+// put is Put's body, optionally in batch mode. Outside a batch it is durable on
+// return: the temp file is fsynced before the rename and the containing
+// directory is fsynced after, per docs/design-spec.md §8. In batch mode on a
+// platform with syncfs (see batchUsesSyncFS) both fsyncs are skipped, because
+// Batch.Flush issues a single whole-store sync that makes every blob's content
+// and rename durable at once, before the caller commits the referencing state.
+// The §8 invariant, no committed state ever references a non-durable blob, holds
+// either way; batching only defers the flush, it never removes it.
+func (s *Store) put(r io.Reader, batched bool) (hash string, err error) {
+	deferSync := batched && batchUsesSyncFS
 	tmp, err := os.CreateTemp(s.tmp, "blob-*")
 	if err != nil {
 		return "", err
@@ -84,9 +97,14 @@ func (s *Store) Put(r io.Reader) (hash string, err error) {
 		tmp.Close()
 		return "", err
 	}
-	if err = tmp.Sync(); err != nil {
-		tmp.Close()
-		return "", err
+	// Flush the blob's content before it is installed. In batch mode the single
+	// syncfs at Flush covers this, so skip the per-blob fsync (the whole point of
+	// the batch: thousands of first-snap fsyncs collapse into one).
+	if !deferSync {
+		if err = tmp.Sync(); err != nil {
+			tmp.Close()
+			return "", err
+		}
 	}
 	if err = tmp.Close(); err != nil {
 		return "", err
@@ -114,7 +132,11 @@ func (s *Store) Put(r io.Reader) (hash string, err error) {
 	}
 	// Persist the rename itself: fsync the fan-out directory, and the store root
 	// too when the fan-out directory is new, before the caller commits a state
-	// that references this blob (docs/design-spec.md §8). No-op on Windows.
+	// that references this blob (docs/design-spec.md §8). No-op on Windows. In
+	// batch mode the syncfs at Flush persists every rename at once, so skip it.
+	if deferSync {
+		return hash, nil
+	}
 	if err = syncDir(fanDir); err != nil {
 		return "", fmt.Errorf("syncing blob directory %s: %w", fanDir, err)
 	}
@@ -126,6 +148,41 @@ func (s *Store) Put(r io.Reader) (hash string, err error) {
 	return hash, nil
 }
 
+// Batch stores blobs with their durability fsyncs batched into a single
+// whole-store sync at Flush, instead of one fsync (plus a directory fsync) per
+// blob. This is the decisive win for a first snapshot, where every file is a
+// miss: thousands of per-blob fsyncs, which dominate the wall clock, collapse
+// into one syncfs. It relies on a platform whole-filesystem sync
+// (batchUsesSyncFS); where none exists, Put falls back to per-blob fsyncs, so a
+// Batch is always correct, just not always faster. A Batch is used for a single
+// snapshot and MUST be Flushed before the state referencing its blobs is
+// committed (docs/design-spec.md §8). Its methods are safe to call concurrently
+// (the underlying store writes are).
+type Batch struct {
+	s *Store
+}
+
+// NewBatch begins a batch over the store.
+func (s *Store) NewBatch() *Batch { return &Batch{s: s} }
+
+// Put stores r through the batch (single pass: compress and hash together).
+func (b *Batch) Put(r io.Reader) (string, error) { return b.s.put(r, true) }
+
+// PutFile stores an on-disk file through the batch, dedup-skipping the write
+// when the content is already stored, exactly like Store.PutFile.
+func (b *Batch) PutFile(f *os.File) (string, error) { return b.s.putFile(f, true) }
+
+// Flush makes every blob the batch stored durable, content and rename alike,
+// with a single whole-store sync (syncfs on Linux). Where the batch already
+// fsynced each blob inline (no syncfs available), it is a no-op. Call it before
+// committing any state that references the batch's blobs.
+func (b *Batch) Flush() error {
+	if !batchUsesSyncFS {
+		return nil // blobs were fsynced per-blob in put; nothing deferred
+	}
+	return syncFS(b.s.dir)
+}
+
 // PutFile stores an on-disk file, skipping all writes when its content is
 // already stored: a first pass streams the plaintext through SHA-256 only, and
 // the compress-and-install path (Put) runs solely on a miss. Unchanged files,
@@ -134,6 +191,13 @@ func (s *Store) Put(r io.Reader) (hash string, err error) {
 // a file mutating between the two passes still stores whatever was read, never
 // a wrong hash; the next snapshot reconciles (walk is the source of truth).
 func (s *Store) PutFile(f *os.File) (string, error) {
+	return s.putFile(f, false)
+}
+
+// putFile is PutFile's body, optionally in batch mode (see put). On a cold store
+// (a first snapshot), where the pre-hash pass can never hit, prefer
+// Put/Batch.Put, which reads the file once instead of twice.
+func (s *Store) putFile(f *os.File, batched bool) (string, error) {
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
@@ -145,7 +209,7 @@ func (s *Store) PutFile(f *os.File) (string, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return "", err
 	}
-	return s.Put(f)
+	return s.put(f, batched)
 }
 
 // Open returns a reader over the decompressed contents of a blob.

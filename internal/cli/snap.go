@@ -2,8 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"sync"
+	"time"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
@@ -42,7 +46,21 @@ func newSnapCmd() *cobra.Command {
 			}
 			defer eng.Close()
 
-			res, err := eng.Snap(ctx, core.SnapOptions{Label: label})
+			// Show a transient indexing counter on stderr while a large snapshot
+			// runs, so a slow first snap isn't a silent wait. It stays on stderr
+			// and only when stderr is a terminal, so `id=$(spor snap)` and pipes
+			// see just the snapshot id on stdout.
+			opts := core.SnapOptions{Label: label}
+			var prog *snapProgress
+			if f, ok := cmd.ErrOrStderr().(*os.File); ok && term.IsTerminal(f.Fd()) {
+				prog = newSnapProgress(f)
+				opts.OnProgress = prog.update
+			}
+
+			res, err := eng.Snap(ctx, opts)
+			if prog != nil {
+				prog.clear()
+			}
 			if err != nil {
 				return err
 			}
@@ -57,4 +75,50 @@ func newSnapCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&label, "label", "l", "", "name for this snapshot")
 	return cmd
+}
+
+// snapProgress renders a snapshot's file-indexing progress as a single,
+// self-overwriting line on a terminal. Snap's OnProgress fires from worker
+// goroutines, so updates are serialized under mu and throttled so the redraws
+// stay cheap.
+type snapProgress struct {
+	w     io.Writer
+	start time.Time
+
+	mu    sync.Mutex
+	last  time.Time
+	shown bool // a progress line has been drawn (so clear must erase it)
+}
+
+func newSnapProgress(w io.Writer) *snapProgress {
+	return &snapProgress{w: w, start: time.Now()}
+}
+
+// update redraws the counter, at most ~16 times a second, and never before the
+// snapshot has run long enough to be worth reporting, so a quick snap finishes
+// silently with no flash.
+func (p *snapProgress) update(done, total int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := time.Now()
+	if now.Sub(p.start) < 150*time.Millisecond {
+		return // let a fast snapshot finish before drawing anything
+	}
+	if p.shown && done < total && now.Sub(p.last) < 60*time.Millisecond {
+		return // throttle intermediate redraws
+	}
+	p.last = now
+	p.shown = true
+	// \r returns to column 0; \x1b[K clears the rest of the line.
+	fmt.Fprintf(p.w, "\r\x1b[K%s", indexingText(done, total))
+}
+
+// clear erases the progress line if one was drawn, so the snapshot id prints on
+// a clean line.
+func (p *snapProgress) clear() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.shown {
+		fmt.Fprint(p.w, "\r\x1b[K")
+	}
 }

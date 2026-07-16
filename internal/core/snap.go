@@ -9,18 +9,36 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"runtime"
+	"sync/atomic"
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/emprcl/spor/internal/blob"
 	"github.com/emprcl/spor/internal/db/gen"
 	"github.com/emprcl/spor/internal/lock"
 	"github.com/emprcl/spor/internal/walk"
 )
 
+// syncBatchThreshold is the number of blobs a snapshot must store before it
+// batches their durability into a single whole-store syncfs (see snapLocked and
+// blob.Batch). Below it, blobs are fsynced inline: for the few-file snapshots
+// that dominate while `spor watch` runs, that avoids forcing a filesystem-wide
+// flush on every settle. Above it (the first snapshot, bulk changes), the one
+// batched sync is far cheaper than one fsync per blob.
+const syncBatchThreshold = 64
+
 // SnapOptions configures a snapshot.
 type SnapOptions struct {
 	Label string // optional human name for the created state
+	// OnProgress, if set, is called as the walk's files are processed, with the
+	// number handled so far and the total tracked. It runs from the snapshot's
+	// worker goroutines (concurrently), so it must be cheap and safe to call
+	// from multiple goroutines. It exists so a front-end can show first-snap
+	// progress instead of a blank screen (see cli watch).
+	OnProgress func(done, total int)
 }
 
 // SnapResult reports the outcome. When Created is false the working tree
@@ -88,35 +106,115 @@ func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, 
 		cache[r.Path] = r
 	}
 	snapStart := time.Now().UnixNano()
-	var upserts []gen.UpsertStatCacheEntryParams
+	// A cold store (empty cache: the first snapshot) can never hit the blob
+	// dedup pre-hash, so store misses in a single read+compress pass instead of
+	// hashing every file twice.
+	cold := len(cache) == 0
+
+	// snapFile is one file's outcome, kept index-aligned with files so the
+	// manifest stays in the walk's sorted order no matter which worker finishes
+	// first. has is false for a file that vanished mid-snapshot (recorded as
+	// deleted); upsert is set only for a freshly stored miss.
+	type snapFile struct {
+		entry  manifestEntry
+		upsert *gen.UpsertStatCacheEntryParams
+		has    bool
+	}
+	results := make([]snapFile, len(files))
 	walked := make(map[string]bool, len(files))
 
-	entries := make([]manifestEntry, 0, len(files))
-	for _, f := range files {
+	// Classify serially (cheap: a stat cache lookup and, on a hit, a blob stat).
+	// Hits are resolved here; misses are queued for the concurrent store below.
+	var toStore []int
+	for i, f := range files {
 		walked[f.Rel] = true
 		if row, ok := cache[f.Rel]; ok &&
 			row.Size == f.Size && row.MtimeNs == f.MtimeNs && row.Inode == int64(f.Inode) &&
 			f.MtimeNs < row.RecordedAt &&
 			e.blobs.Has(row.BlobHash) {
-			entries = append(entries, manifestEntry{path: f.Rel, hash: row.BlobHash, exec: f.Exec})
+			results[i] = snapFile{entry: manifestEntry{path: f.Rel, hash: row.BlobHash, exec: f.Exec}, has: true}
 			continue
 		}
-		hash, storeErr := e.storeFile(f.Abs)
-		switch {
-		case storeErr == nil:
-			entries = append(entries, manifestEntry{path: f.Rel, hash: hash, exec: f.Exec})
-			upserts = append(upserts, gen.UpsertStatCacheEntryParams{
-				Path:       f.Rel,
-				Size:       f.Size,
-				MtimeNs:    f.MtimeNs,
-				Inode:      int64(f.Inode),
-				BlobHash:   hash,
-				RecordedAt: snapStart,
-			})
-		case errors.Is(storeErr, fs.ErrNotExist):
-			// Vanished since the walk (editor atomic saves): recorded as deleted.
-		default:
-			return SnapResult{}, fmt.Errorf("storing %s: %w", f.Rel, storeErr)
+		toStore = append(toStore, i)
+	}
+
+	// Store the misses concurrently: hashing and zstd compression are CPU-bound
+	// and the file reads overlap, so a bounded pool turns a big cold snapshot
+	// from a serial crawl into a multi-core one.
+	total := len(files)
+	var done int64
+	if opts.OnProgress != nil {
+		// Hits are already handled; count them so progress covers the whole tree.
+		atomic.AddInt64(&done, int64(total-len(toStore)))
+	}
+	report := func() {
+		if opts.OnProgress != nil {
+			opts.OnProgress(int(atomic.AddInt64(&done, 1)), total)
+		}
+	}
+
+	// Batch the durability fsyncs into one whole-store sync (Flush) only when
+	// enough blobs are being stored to pay for it: the first snapshot and bulk
+	// changes. A small snapshot, the common case while `spor watch` runs,
+	// fsyncs its handful of blobs inline instead, so it doesn't force a
+	// filesystem-wide flush every few seconds (docs/design-spec.md §8). nil
+	// batch means the inline path (storeFile handles both).
+	var batch *blob.Batch
+	if len(toStore) >= syncBatchThreshold {
+		batch = e.blobs.NewBatch()
+	}
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(runtime.GOMAXPROCS(0))
+	for _, idx := range toStore {
+		g.Go(func() error {
+			if err := gctx.Err(); err != nil {
+				return err // ctx cancelled (e.g. Ctrl+C during a big first snap)
+			}
+			f := files[idx]
+			hash, storeErr := e.storeFile(batch, f.Abs, cold)
+			switch {
+			case storeErr == nil:
+				results[idx] = snapFile{
+					entry: manifestEntry{path: f.Rel, hash: hash, exec: f.Exec},
+					upsert: &gen.UpsertStatCacheEntryParams{
+						Path:       f.Rel,
+						Size:       f.Size,
+						MtimeNs:    f.MtimeNs,
+						Inode:      int64(f.Inode),
+						BlobHash:   hash,
+						RecordedAt: snapStart,
+					},
+					has: true,
+				}
+			case errors.Is(storeErr, fs.ErrNotExist):
+				// Vanished since the walk (editor atomic saves): recorded as deleted.
+			default:
+				return fmt.Errorf("storing %s: %w", f.Rel, storeErr)
+			}
+			report()
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return SnapResult{}, err
+	}
+	// Make every blob the batch stored durable (content and rename) before the
+	// state that references them is committed (docs/design-spec.md §8). A nil
+	// batch already fsynced each blob inline, so there is nothing to flush.
+	if batch != nil {
+		if err := batch.Flush(); err != nil {
+			return SnapResult{}, err
+		}
+	}
+
+	entries := make([]manifestEntry, 0, len(files))
+	var upserts []gen.UpsertStatCacheEntryParams
+	for i := range results {
+		if r := results[i]; r.has {
+			entries = append(entries, r.entry)
+			if r.upsert != nil {
+				upserts = append(upserts, *r.upsert)
+			}
 		}
 	}
 	var cacheDeletes []string
@@ -255,14 +353,26 @@ func (e *Engine) commitState(
 }
 
 // storeFile streams a file into the blob store and returns its content hash.
-// PutFile writes nothing for content the store already holds.
-func (e *Engine) storeFile(abs string) (string, error) {
+// When batch is non-nil the store's durability fsync is deferred to the batch's
+// Flush; when nil the blob is fsynced inline. On a cold store (the first
+// snapshot) it uses a single read+compress pass; otherwise it uses the dedup
+// pre-hash path, which writes nothing for content the store already holds.
+func (e *Engine) storeFile(batch *blob.Batch, abs string, cold bool) (string, error) {
 	f, err := os.Open(abs)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	return e.blobs.PutFile(f)
+	switch {
+	case batch != nil && cold:
+		return batch.Put(f)
+	case batch != nil:
+		return batch.PutFile(f)
+	case cold:
+		return e.blobs.Put(f)
+	default:
+		return e.blobs.PutFile(f)
+	}
 }
 
 // manifestEntry is one path→(blob-hash, exec-bit) row, held in sorted path order.

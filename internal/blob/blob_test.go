@@ -157,6 +157,76 @@ func TestPutFileDedupSkipsWrites(t *testing.T) {
 	}
 }
 
+func TestBatchStoresDurablyAndDedups(t *testing.T) {
+	s := newStore(t)
+	dir := t.TempDir()
+
+	// A file to exercise Batch.PutFile, and some raw content for Batch.Put,
+	// including a duplicate so the batch's dedup path runs too.
+	filePath := filepath.Join(dir, "f.bin")
+	fileData := []byte("batched file content\n")
+	if err := os.WriteFile(filePath, fileData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	raw := [][]byte{[]byte("alpha"), []byte("beta"), []byte("alpha")} // last dups first
+
+	b := s.NewBatch()
+	var hashes []string
+	f, err := os.Open(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := b.PutFile(f)
+	f.Close()
+	if err != nil {
+		t.Fatalf("Batch.PutFile: %v", err)
+	}
+	hashes = append(hashes, h)
+	for _, r := range raw {
+		h, err := b.Put(bytes.NewReader(r))
+		if err != nil {
+			t.Fatalf("Batch.Put: %v", err)
+		}
+		hashes = append(hashes, h)
+	}
+	if err := b.Flush(); err != nil {
+		t.Fatalf("Batch.Flush: %v", err)
+	}
+
+	// Every distinct content round-trips through the store after Flush.
+	want := map[string][]byte{hashes[0]: fileData}
+	for i, r := range raw {
+		want[hashes[i+1]] = r
+	}
+	for hash, data := range want {
+		rc, err := s.Open(hash)
+		if err != nil {
+			t.Fatalf("Open(%s): %v", hash, err)
+		}
+		got, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatalf("ReadAll(%s): %v", hash, err)
+		}
+		if !bytes.Equal(got, data) {
+			t.Fatalf("round-trip mismatch for %s: got %q want %q", hash, got, data)
+		}
+	}
+
+	// The duplicate "alpha" must have deduped to a single object: 3 distinct
+	// contents (file, alpha, beta) → 3 blobs, not 4.
+	if hashes[1] != hashes[3] {
+		t.Fatalf("duplicate content produced different hashes: %s != %s", hashes[1], hashes[3])
+	}
+	if n := countObjects(t, s); n != 3 {
+		t.Fatalf("expected 3 deduped blobs, got %d", n)
+	}
+	// A batch leaves no temp files behind, just like Put.
+	if ents, err := os.ReadDir(s.tmp); err != nil || len(ents) != 0 {
+		t.Fatalf("temp dir not empty after batch (err=%v, entries=%d)", err, len(ents))
+	}
+}
+
 func TestPutLeavesNoTempFiles(t *testing.T) {
 	s := newStore(t)
 	if _, err := s.Put(bytes.NewReader([]byte("x"))); err != nil {

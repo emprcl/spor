@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -83,8 +84,13 @@ func runWatchLive(ctx context.Context, eng *core.Engine, root string, f *os.File
 	v.enter()
 	defer v.leave() // idempotent: always restores the terminal, even on error
 
-	// Capture the current tree immediately so there is a baseline, then paint.
-	if _, err := eng.Snap(ctx, core.SnapOptions{}); err != nil {
+	// Capture the current tree immediately so there is a baseline. The first
+	// snapshot of a big project can take a while, so drive it with a live
+	// indexing screen instead of leaving the alternate screen blank.
+	if err := v.initialSnap(ctx); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil // Ctrl+C during the first snap: stop cleanly, nothing recorded
+		}
 		return err
 	}
 	v.repaint(ctx)
@@ -159,6 +165,74 @@ func runWatchLive(ctx context.Context, eng *core.Engine, root string, f *os.File
 	renderLog(out, res)
 	fmt.Fprintln(out, styleWatchHint.Render("stopped watching."))
 	return nil
+}
+
+// initialSnap runs the baseline snapshot, painting a live "indexing" screen if
+// it takes long enough to be worth showing. A fast snapshot (a warm store or a
+// small project) finishes before the first paint, so nothing flashes. Progress
+// counts arrive from the snapshot's worker goroutines, so they are read under a
+// small local mutex.
+func (v *liveView) initialSnap(ctx context.Context) error {
+	var mu sync.Mutex
+	var done, total int
+	errc := make(chan error, 1)
+	go func() {
+		_, err := v.eng.Snap(ctx, core.SnapOptions{
+			OnProgress: func(d, t int) {
+				mu.Lock()
+				done, total = d, t
+				mu.Unlock()
+			},
+		})
+		errc <- err
+	}()
+
+	// Give a quick snapshot a chance to finish before showing anything, so the
+	// indexing screen never flickers up for a project that snaps instantly.
+	select {
+	case err := <-errc:
+		return err
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	t := time.NewTicker(100 * time.Millisecond)
+	defer t.Stop()
+	for {
+		mu.Lock()
+		d, tot := done, total
+		mu.Unlock()
+		v.paintIndexing(d, tot)
+		select {
+		case err := <-errc:
+			return err
+		case <-t.C:
+		}
+	}
+}
+
+// paintIndexing draws the first-snap progress screen: the watch header with its
+// breathing heartbeat and a line counting the files indexed so far.
+func (v *liveView) paintIndexing(done, total int) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.left {
+		return
+	}
+	status := indexingText(done, total)
+	header := v.style(styleWatchBanner.Render("  watching ") + styleWatchPath.Render(v.root))
+
+	var frame bytes.Buffer
+	frame.WriteString("\x1b[H\x1b[J") // cursor home, clear to end of screen
+	frame.WriteString(header + "\n\n")
+	frame.WriteString(v.style(styleWatchHint.Render(status)))
+	if s := frame.String(); s != v.lastFrame {
+		v.lastFrame = s
+		_, _ = io.WriteString(v.f, s)
+	}
+	// Advance the heartbeat every tick, even when the count did not change, so
+	// the dot keeps breathing while a large file is being read.
+	v.lastPulse = ""
+	v.writePulse()
 }
 
 // liveView owns the alternate-screen live monitor. Its repaint is guarded by a
@@ -348,10 +422,21 @@ func runWatchStream(ctx context.Context, eng *core.Engine, root string, w io.Wri
 	fmt.Fprintln(out, styleWatchBanner.Render("watching ")+styleWatchPath.Render(root))
 	fmt.Fprintln(out, styleWatchHint.Render("recording changes as they happen. press Ctrl+C to stop."))
 
-	// Capture the current tree immediately so there is a baseline.
-	if res, err := eng.Snap(ctx, core.SnapOptions{}); err != nil {
+	// Capture the current tree immediately so there is a baseline. Announce the
+	// first snapshot once its size is known, so a slow first index over a big
+	// project isn't a silent wait (printed once, not per file).
+	var announce sync.Once
+	res, err := eng.Snap(ctx, core.SnapOptions{
+		OnProgress: func(_, total int) {
+			announce.Do(func() {
+				fmt.Fprintln(out, styleWatchHint.Render(fmt.Sprintf("indexing %s files...", humanCount(total))))
+			})
+		},
+	})
+	if err != nil {
 		return err
-	} else if res.Created {
+	}
+	if res.Created {
 		logWatch(out, watch.Event{Kind: watch.Created, ID: res.StateID})
 	}
 
