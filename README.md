@@ -148,6 +148,16 @@ you name it from another terminal:
 spor label @ before-refactor
 ```
 
+That snapshot now has a name. `spor log`, the same history `spor watch` shows
+live, lists it alongside the others, newest first, with `@` marking where you
+are:
+
+```text
+01KXNZQD5N     now before-refactor (@) ●
+01KXNZQD54  2m ago                     ●
+01KXNZQD4M  5m ago                     ●
+```
+
 You keep iterating. An hour later you've gone down a path that isn't working.
 Rather than manually undoing your edits, just ask Spor for the history:
 
@@ -155,17 +165,47 @@ Rather than manually undoing your edits, just ask Spor for the history:
 spor log
 ```
 
-`spor log` shows every snapshot, newest first, with your named ones called
-out. You spot `before-refactor` a bit further back and jump straight to it:
+```text
+01KXNZQD81     now (@)             ●
+01KXNZQD6S 20m ago                 ●
+01KXNZQD5N  1h ago before-refactor ●
+01KXNZQD54  1h ago                 ●
+01KXNZQD4M  1h ago                 ●
+```
+
+Every snapshot, newest first, with your named ones called out. You spot
+`before-refactor` a bit further back and jump straight to it:
 
 ```sh
 spor go before-refactor
 ```
 
+`@` jumps back onto `before-refactor` and your files match it again:
+
+```text
+01KXNZQD81  5m ago                     ●
+01KXNZQD6S 20m ago                     ●
+01KXNZQD5N  1h ago before-refactor (@) ●
+01KXNZQD54  1h ago                     ●
+01KXNZQD4M  1h ago                     ●
+```
+
 Your files are instantly restored to exactly how they were at that point;
 whatever you hadn't snapshotted yet was recorded first, so nothing is lost,
 and you can always `spor go` back to where you were. From here you branch off
-in a new direction. Curious what actually changed between the two?
+in a new direction, and `spor log` shows the two timelines side by side:
+
+```text
+01KXNZQT8E     now (@)               ●
+01KXNZQD81 10m ago                 ● │
+01KXNZQD6S 20m ago                 ● │
+                                   ├─╯
+01KXNZQD5N  1h ago before-refactor ●
+01KXNZQD54  1h ago                 ●
+01KXNZQD4M  1h ago                 ●
+```
+
+Curious what actually changed between the two?
 
 ```sh
 spor diff before-refactor
