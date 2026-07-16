@@ -5,7 +5,7 @@ previous state. This document specifies the data model, storage, recording,
 operations, CLI, and runtime design.
 
 Some capabilities described here are not yet built; they are marked
-_(not yet implemented)_ inline, and §10 lists them together.
+_(not yet implemented)_ inline, and §11 lists them together.
 
 ---
 
@@ -577,6 +577,15 @@ files, only `.spor/`.
 | `spor remote add <url>` | configure the server |
 | `spor remote drop <ref>` | delete a subtree **on the server** (sync is otherwise additive-only) |
 
+**Attachments** (pin reference media to a state, see §9), _not yet implemented_:
+
+| Command | Effect |
+|---|---|
+| `spor attach <ref> <path>...` | pin one or more files to a state (default `@`); copies their bytes now, records no state |
+| `spor attachments <ref>` | list a state's attachments |
+| `spor detach <id>` | remove one attachment |
+| `spor export <id> [<out>]` | write an attachment's bytes back out |
+
 **Maintenance** (rare; GC is mostly automatic):
 
 | Command | Effect |
@@ -589,7 +598,7 @@ files, only `.spor/`.
 ## 7. Sync
 
 > _Not yet implemented (planned)._ This section describes a future capability;
-> none of the `push` / `pull` / `remote` commands or the server exist yet (§10).
+> none of the `push` / `pull` / `remote` commands or the server exist yet (§11).
 
 Optional single-user **push/pull** to a server, purely for backup and moving
 history between the same user's machines. **No collaboration**: one author, no
@@ -742,7 +751,90 @@ manifest is well-formed and its stored hash recomputes; every `parent` and
 
 ---
 
-## 9. Design Principles
+## 9. Attachments
+
+> _Not yet implemented (planned)._ This section describes a future capability;
+> the `attach` / `attachments` / `detach` / `export` commands and the
+> `attachments` table do not exist yet (§11).
+
+spor targets exploratory work, and users want to pin reference media, mainly
+images (a screenshot of a generative sketch, a render, a reference photo), to a
+state so a later front-end (web, TUI, GUI) can show *where they were* at that
+moment. An **attachment** is commentary *about* a state, not part of its
+content.
+
+### Model
+
+An attachment is a named binary object bound to one state and stored as
+**mutable metadata, like a label** (§2): it is part of no hash, and adding or
+removing one never creates, alters, or re-parents a state. That is exactly what
+lets a user annotate a *past* state retroactively, which is the whole point of
+the feature.
+
+An `attachments` table carries: an **id** (ULID), the **state id** it belongs to
+(a foreign key, `ON DELETE CASCADE`), a **blob hash**, a **name** (original
+filename or caption), a **media type** (sniffed MIME, so a UI knows an
+`image/png` from an `audio/wav`), and a **created_at** timestamp.
+
+Attachments reuse the content-addressed blob store (§3): an image attached to
+several states, or one identical to a tracked file already in the store, costs a
+single blob. Because blobs already stream, compress, and deduplicate, large
+media needs no new storage machinery.
+
+### Capture semantics
+
+`attach` **copies bytes at attach time; it is not a live link** to a file. It
+reads the file now, content-addresses it into a blob, and records a row.
+Editing or deleting the source afterwards leaves the attachment untouched: the
+pinned image stays as it was when attached. This is the desired behavior for
+"remember where I was," and the one thing worth stating explicitly in help text,
+since a user might assume the opposite.
+
+A file referenced from *inside* the watched project is captured the same way. If
+it is tracked and unchanged, its bytes are already a blob, so the attachment
+deduplicates to it at zero storage cost; if it is ignored or outside the
+project, a new blob is stored and kept alive by the attachment row alone. Either
+way the write lands only in `.spor/`, which the walk always excludes (§4), so
+attaching never dirties the tree and never triggers a snapshot. The row insert
+takes the write lock (§8) like any other mutation, so it serializes against a
+running watcher's snapshot; the content-addressed blob write is idempotent, so a
+concurrent snapshot of the same file just produces the identical object.
+
+### Storage & integrity
+
+Attachment rows live in SQLite; their bytes live in the blob store like any
+other blob. Two integration points:
+
+- **GC (§8)** adds attachment blobs to the reachable set, so an image is kept
+  while *either* a manifest entry or an attachment references it. Dropping a
+  state cascades its attachment rows; the next sweep reclaims any blob then
+  referenced by nothing.
+- **Verify (§8)** checks each attachment blob exists and matches its `SHA-256`,
+  alongside manifest blobs.
+
+### Sync
+
+Attachments are durable metadata, so they travel with states over sync (§7),
+unlike `HEAD`, the journal, and the stat cache, which stay local. An attachment
+row is uploaded after its blob and its state (blobs before the rows that
+reference them, parents before children), the same ordering the rest of sync
+uses.
+
+### CLI
+
+| Command | Effect |
+|---|---|
+| `spor attach <ref> <path>...` | pin one or more files to the state named by `<ref>` (default `@`); copies their bytes now, moves no `HEAD`, records no state |
+| `spor attachments <ref>` | list a state's attachments (id, name, type, size); a pure read |
+| `spor detach <id>` | remove one attachment (its blob is GC'd if now unreferenced) |
+| `spor export <id> [<out>]` | write an attachment's bytes back out, so the CLI can hand an image to a viewer before the TUI/GUI exist |
+
+`<ref>` defaults to `@`, so `spor attach screenshot.png` pins to the current
+state without the user ever handling an id.
+
+---
+
+## 10. Design Principles
 
 - Automatic by default: no manual commits, no visible branches, no staging.
 - State *contents* are immutable; history may be explicitly dropped or
@@ -755,7 +847,7 @@ manifest is well-formed and its stored hash recomputes; every `parent` and
 
 ---
 
-## 10. Implementation status
+## 11. Implementation status
 
 The core is implemented: recording (manual `snap` and the `watch` watcher), the
 stat cache, ignore rules (built-in defaults plus root `.sporignore`), the
@@ -772,6 +864,8 @@ The following are described above but **not yet implemented** (planned):
   server. None of it exists yet.
 - **Interactive TUI** (§6, §8): `watch` is a live monitor only; there is no
   keyboard-driven navigation or in-view mutation.
+- **Attachments** (§9): pinning reference media to a state; the `attach` /
+  `attachments` / `detach` / `export` commands and the `attachments` table.
 - **Symlinks** (§2): only regular files are tracked.
 - **Carrying locked-but-present paths on Windows** (§4).
 - **Content-defined chunking** (§3) and **diff caching** (§5): performance
