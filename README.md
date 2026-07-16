@@ -196,47 +196,37 @@ you need to. See the full command reference below, or `spor --help` /
 
 **Common**
 
-| Command | Effect |
-|---|---|
-| `spor watch` | watch the project and snapshot it automatically as you work (Ctrl+C to stop) |
-| `spor snap [-l <name>]` | save one snapshot by hand, optionally naming it (only needed when `watch` isn't running) |
-| `spor log` | show the project history, newest first, with `@` marking where you are |
-| `spor undo [n]` | step back `n` snapshots (default 1); reversible with `redo` |
-| `spor redo [n]` | step forward `n` snapshots (default 1) after an `undo` |
-| `spor go <ref>` | jump the project back (or forward) to any snapshot |
-| `spor pick <ref> <path>` | bring back one file or directory from a past snapshot, leaving everything else alone |
+- `spor watch`: watch the project and snapshot it automatically as you work (Ctrl+C to stop)
+- `spor snap [-l <name>]`: save one snapshot by hand, optionally naming it (only needed when `watch` isn't running)
+- `spor log`: show the project history, newest first, with `@` marking where you are
+- `spor undo [n]`: step back `n` snapshots (default 1); reversible with `redo`
+- `spor redo [n]`: step forward `n` snapshots (default 1) after an `undo`
+- `spor go <ref>`: jump the project back (or forward) to any snapshot
+- `spor pick <ref> <path>`: bring back one file or directory from a past snapshot, leaving everything else alone
 
 **Naming & inspecting**
 
-| Command | Effect |
-|---|---|
-| `spor label <ref> <name>` | name a snapshot so you can refer to it later |
-| `spor label -d <name>` | remove a label |
-| `spor label` | list every label and the snapshot it names |
-| `spor diff <ref> [<ref>]` | show what changed from `<ref>` to `@`, or between two snapshots |
-| `spor status` | project path, whether a watcher is running, history size, store size, and where `@` sits |
+- `spor label <ref> <name>`: name a snapshot so you can refer to it later
+- `spor label -d <name>`: remove a label
+- `spor label`: list every label and the snapshot it names
+- `spor diff <ref> [<ref>]`: show what changed from `<ref>` to `@`, or between two snapshots
+- `spor status`: project path, whether a watcher is running, history size, store size, and where `@` sits
 
 **History editing** (destructive, and confirms first unless `-y` is given)
 
-| Command | Effect |
-|---|---|
-| `spor drop <ref>` | permanently delete a snapshot and everything after it |
-| `spor trim <ref>` | permanently drop everything before a snapshot, keeping it and what follows |
-| `spor fold <a> <b>` | squash the run of snapshots from `a` to `b` into one |
-| `spor thin` | collapse linear runs across the whole history, keeping only tips, branch points, and named snapshots |
+- `spor drop <ref>`: permanently delete a snapshot and everything after it
+- `spor trim <ref>`: permanently drop everything before a snapshot, keeping it and what follows
+- `spor fold <a> <b>`: squash the run of snapshots from `a` to `b` into one
+- `spor thin`: collapse linear runs across the whole history, keeping only tips, branch points, and named snapshots
 
 **Starting over**
 
-| Command | Effect |
-|---|---|
-| `spor forget` | delete all of Spor's history for the project (your files are kept) |
+- `spor forget`: delete all of Spor's history for the project (your files are kept)
 
 **Maintenance**
 
-| Command | Effect |
-|---|---|
-| `spor verify` | check the stored history for corruption |
-| `spor gc` | reclaim disk space from data no longer referenced by any snapshot |
+- `spor verify`: check the stored history for corruption
+- `spor gc`: reclaim disk space from data no longer referenced by any snapshot
 
 A `<ref>` can be `@` (the current snapshot), `@~n` (`n` snapshots back), a
 duration like `2h` or `3d`, a snapshot id (or a short prefix of one), or a
