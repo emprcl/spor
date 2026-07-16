@@ -474,20 +474,34 @@ func shortLen(ids []string) int {
 	return 26
 }
 
-// humanizeSince renders a compact relative time like "just now", "5 min ago",
-// "3h ago", "2d ago", or an absolute date for anything older than a week.
+// timeFieldWidth is the fixed display width of every humanizeSince value. The
+// widest cases ("59s ago", "59m ago", "23h ago", "51w ago") are 7 columns, and
+// every shorter value is right-aligned into that width so the number, unit, and
+// "ago" always land in the same place.
+const timeFieldWidth = 7
+
+// humanizeSince renders a fixed-width relative time: "now", or "<n><unit> ago"
+// with a one-letter unit (s, m, h, d, w, y). Every value is exactly
+// timeFieldWidth columns wide, right-aligned, so the log's time column stays
+// perfectly uniform regardless of the age.
 func humanizeSince(t time.Time) string {
 	d := time.Since(t)
+	var core string
 	switch {
+	case d < time.Minute && int(d.Seconds()) == 0:
+		core = "now"
 	case d < time.Minute:
-		return "just now"
+		core = fmt.Sprintf("%ds ago", int(d.Seconds()))
 	case d < time.Hour:
-		return fmt.Sprintf("%d min ago", int(d.Minutes()))
+		core = fmt.Sprintf("%dm ago", int(d.Minutes()))
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
+		core = fmt.Sprintf("%dh ago", int(d.Hours()))
 	case d < 7*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+		core = fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	case d < 365*24*time.Hour:
+		core = fmt.Sprintf("%dw ago", int(d.Hours()/(24*7)))
 	default:
-		return t.Format("Jan 2, 2006")
+		core = fmt.Sprintf("%dy ago", int(d.Hours()/(24*365)))
 	}
+	return fmt.Sprintf("%*s", timeFieldWidth, core)
 }

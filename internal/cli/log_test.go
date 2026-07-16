@@ -215,14 +215,20 @@ func TestHumanizeSince(t *testing.T) {
 		d    time.Duration
 		want string
 	}{
-		{10 * time.Second, "just now"},
-		{5 * time.Minute, "5 min ago"},
-		{3 * time.Hour, "3h ago"},
-		{50 * time.Hour, "2d ago"},
+		{10 * time.Second, "10s ago"},
+		{5 * time.Minute, " 5m ago"},
+		{59 * time.Minute, "59m ago"},
+		{3 * time.Hour, " 3h ago"},
+		{50 * time.Hour, " 2d ago"},
+		{9 * 7 * 24 * time.Hour, " 9w ago"},
+		{400 * 24 * time.Hour, " 1y ago"},
 	}
 	for _, c := range cases {
 		if got := humanizeSince(now.Add(-c.d)); got != c.want {
 			t.Errorf("humanizeSince(-%s) = %q, want %q", c.d, got, c.want)
+		}
+		if len(c.want) != timeFieldWidth {
+			t.Errorf("case %s want %q has width %d, want fixed %d", c.d, c.want, len(c.want), timeFieldWidth)
 		}
 	}
 }
