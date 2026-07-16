@@ -163,11 +163,28 @@ identical contents anywhere map to one blob automatically. Deletions are a
 path's absence from the manifest; renames are delete + add, with content dedup
 meaning nothing is re-stored.
 
-> **Tradeoff:** blobs are whole-file, so a one-pixel PNG edit re-stores the
-> whole file. Accepted for v1. Content-defined chunking is the clean upgrade
-> path for media dedup and doesn't disturb the rest of the model. Whole blobs
-> (vs delta chains) are also what keep drop/trim/fold/GC simple: a state's data
-> is never entangled with a neighbor's.
+> **Tradeoff:** blobs are whole-file, so any change re-stores the whole file: a
+> one-pixel PNG edit, a re-encoded video, a re-saved JPEG. Accepted for v1.
+> Content-defined chunking (CDC) is the upgrade path and doesn't disturb the
+> rest of the model: chunks are just smaller content-addressed blobs, so dedup,
+> GC's mark-sweep, and the stat cache all generalize to them. Whole chunks (vs
+> delta chains) also keep drop/trim/fold/GC simple: a state's data is never
+> entangled with a neighbor's.
+>
+> **CDC is a bounded, format-dependent win, not a general answer to large
+> media.** It only recovers dedup that survives in the *bytes*, i.e. when
+> unchanged regions stay byte-identical across an edit. It pays off for
+> **appended/growing files** (screen and audio captures, renders that append),
+> which dedup near-perfectly; **uncompressed or framed streams** edited locally
+> (WAV region edits, RAW, EXR, ID3 tag prepends); and **ZIP-container project
+> formats** (Sketch, Procreate, `.docx`), whose untouched entries dedup when the
+> app doesn't rewrite the whole archive. It buys almost nothing when a small
+> logical change rewrites the whole byte stream: a re-encoded video or MP3, a
+> re-saved JPEG, or, because compression destroys locality, the very one-pixel
+> PNG above. For those cases only snapshot *policy* (size thresholds, fewer
+> snapshots of huge files) helps, not chunking. Note also that CDC is a storage
+> optimization, not a capability: spor already versions binary files today, as
+> opaque whole blobs.
 
 ---
 
