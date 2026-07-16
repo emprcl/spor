@@ -54,12 +54,14 @@ func newGoCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd)
 			if res.Settled {
-				fmt.Fprintf(out, "recorded current changes as %s\n", res.SettledID)
+				fmt.Fprintf(out, "recorded current changes as %s\n", styleAccent.Render(res.SettledID))
 			}
-			fmt.Fprintf(out, "went to %s (%d written, %d removed)\n",
-				res.StateID, res.Written, res.Deleted)
+			fmt.Fprintf(out, "went to %s (%s written, %s removed)\n",
+				styleAccent.Render(res.StateID),
+				styleGood.Render(fmt.Sprintf("%d", res.Written)),
+				styleBad.Render(fmt.Sprintf("%d", res.Deleted)))
 			return nil
 		},
 	}

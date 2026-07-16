@@ -51,18 +51,19 @@ func newPickCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd)
 			if res.Settled {
-				fmt.Fprintf(out, "recorded current changes as %s\n", res.SettledID)
+				fmt.Fprintf(out, "recorded current changes as %s\n", styleAccent.Render(res.SettledID))
 			}
 			if res.Written == 0 {
-				fmt.Fprintf(out, "%s already matches %s; nothing to pick\n", rel, abbrev(res.Target))
+				fmt.Fprintln(out, styleMuted.Render(fmt.Sprintf("%s already matches %s; nothing to pick", rel, abbrev(res.Target))))
 				return nil
 			}
-			fmt.Fprintf(out, "picked %s from %s (%d %s)\n",
-				rel, abbrev(res.Target), res.Written, plural(res.Written, "file", "files"))
+			fmt.Fprintf(out, "picked %s from %s (%s)\n",
+				styleAccent.Render(rel), styleAccent.Render(abbrev(res.Target)),
+				styleGood.Render(fmt.Sprintf("%d %s", res.Written, plural(res.Written, "file", "files"))))
 			if res.Created {
-				fmt.Fprintf(out, "recorded as %s\n", res.StateID)
+				fmt.Fprintf(out, "recorded as %s\n", styleAccent.Render(res.StateID))
 			}
 			return nil
 		},

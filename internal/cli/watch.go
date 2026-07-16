@@ -462,8 +462,10 @@ func logWatch(w io.Writer, ev watch.Event) {
 	ts := styleWatchHint.Render(time.Now().Format("15:04:05"))
 	switch ev.Kind {
 	case watch.Created:
+		// The recorded id is the event's result, so it gets accent emphasis, the
+		// same as a one-shot command's "snapshot <id>" line.
 		fmt.Fprintln(w, ts+"  "+styleWatchDot.Render("●")+"  "+
-			styleWatchPath.Render(ev.ID)+"  "+styleWatchHint.Render("snapshot"))
+			styleAccent.Render(ev.ID)+"  "+styleWatchHint.Render("snapshot"))
 	case watch.Error:
 		fmt.Fprintln(w, ts+"  "+styleWatchErr.Render("✗")+"  "+ev.Err.Error())
 	case watch.Settling, watch.NoChange:

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
@@ -47,10 +46,9 @@ func newLogCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// The colorprofile writer downsamples or strips the styles' ANSI to
-			// match the destination (full color on a terminal, plain when piped).
-			out := colorprofile.NewWriter(cmd.OutOrStdout(), os.Environ())
-			renderLog(out, res)
+			// styledOut downsamples or strips the styles' ANSI to match the
+			// destination (full color on a terminal, plain when piped).
+			renderLog(styledOut(cmd), res)
 			return nil
 		},
 	}

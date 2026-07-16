@@ -95,20 +95,24 @@ func runMove(cmd *cobra.Command, verb string, do func(context.Context, *core.Eng
 	if err != nil {
 		return err
 	}
-	out := cmd.OutOrStdout()
+	out := styledOut(cmd)
 	if res.Steps == 0 {
 		edge := "oldest"
 		if verb == "redo" {
 			edge = "newest"
 		}
-		fmt.Fprintf(out, "already at the %s snapshot, nothing to %s\n", edge, verb)
+		fmt.Fprintln(out, styleMuted.Render(fmt.Sprintf("already at the %s snapshot, nothing to %s", edge, verb)))
 		return nil
 	}
 	if res.Settled {
-		fmt.Fprintf(out, "recorded current changes as %s\n", res.SettledID)
+		fmt.Fprintf(out, "recorded current changes as %s\n", styleAccent.Render(res.SettledID))
 	}
-	fmt.Fprintf(out, "%s %d snapshot(s) to %s (%d written, %d removed)\n",
-		past(verb), res.Steps, res.StateID, res.Written, res.Deleted)
+	fmt.Fprintf(out, "%s %s snapshot(s) to %s (%s written, %s removed)\n",
+		past(verb),
+		styleAccent.Render(fmt.Sprintf("%d", res.Steps)),
+		styleAccent.Render(res.StateID),
+		styleGood.Render(fmt.Sprintf("%d", res.Written)),
+		styleBad.Render(fmt.Sprintf("%d", res.Deleted)))
 	return nil
 }
 

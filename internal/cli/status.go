@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
@@ -42,8 +41,7 @@ func newStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := colorprofile.NewWriter(cmd.OutOrStdout(), os.Environ())
-			renderStatus(out, st)
+			renderStatus(styledOut(cmd), st)
 			return nil
 		},
 	}

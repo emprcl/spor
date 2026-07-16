@@ -64,11 +64,12 @@ func newSnapCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			out := styledOut(cmd)
 			if !res.Created {
-				fmt.Fprintln(cmd.OutOrStdout(), "nothing to snap")
+				fmt.Fprintln(out, styleMuted.Render("nothing to snap"))
 				return nil
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "snapshot %s\n", res.StateID)
+			fmt.Fprintf(out, "snapshot %s\n", styleAccent.Render(res.StateID))
 			return nil
 		},
 	}

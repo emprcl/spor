@@ -31,6 +31,12 @@ var (
 	styleID, styleWatchPath lipgloss.Style
 	// faint: history-tree connectors and the folded-run summary.
 	styleConn, styleFold lipgloss.Style
+	// General command-output roles, used by the one-shot commands' result lines so
+	// their output is themed like the rest of the tool: styleAccent for the token a
+	// command acts on or produces (a result state id, a headline number, a byte
+	// size), styleGood/styleBad for created/removed counts and for reassuring vs
+	// destructive wording, styleMuted for secondary prose and no-op messages.
+	styleAccent, styleGood, styleBad, styleMuted lipgloss.Style
 	// stylePulse is the dim→bright ramp for the watch heartbeat dot (see pulseDot).
 	stylePulse []lipgloss.Style
 )
@@ -127,6 +133,11 @@ func applyPalette(p palette) {
 	styleID, styleWatchPath = secondary, secondary
 
 	styleConn, styleFold = fg(p.faint), fg(p.faint)
+
+	// The general command-output roles reuse the same resolved palette: accent for
+	// emphasis, success/danger (bold) for good/bad counts and wording, muted for
+	// secondary prose.
+	styleAccent, styleGood, styleBad, styleMuted = accent, successBold, dangerBold, muted
 
 	// A breathing ramp from muted (dim) to accent (bright): the heartbeat dot never
 	// vanishes but gently pulses. Both ends come from the resolved palette, so it

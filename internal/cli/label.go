@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
@@ -60,12 +59,13 @@ func newLabelCmd() *cobra.Command {
 			}
 			defer eng.Close()
 
+			out := styledOut(cmd)
 			if del {
 				res, err := eng.Unlabel(ctx, args[0])
 				if err != nil {
 					return err
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "removed label %q from %s\n", res.Name, res.StateID)
+				fmt.Fprintf(out, "removed label %s from %s\n", styleLabel.Render(fmt.Sprintf("%q", res.Name)), styleAccent.Render(res.StateID))
 				return nil
 			}
 
@@ -76,7 +76,7 @@ func newLabelCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "labeled %s as %q\n", res.StateID, res.Name)
+			fmt.Fprintf(out, "labeled %s as %s\n", styleAccent.Render(res.StateID), styleLabel.Render(fmt.Sprintf("%q", res.Name)))
 			return nil
 		},
 	}
@@ -92,9 +92,9 @@ func runLabelList(ctx context.Context, cmd *cobra.Command, eng *core.Engine) err
 	if err != nil {
 		return err
 	}
-	out := cmd.OutOrStdout()
+	out := styledOut(cmd)
 	if len(labels) == 0 {
-		fmt.Fprintln(out, "No labels yet. Name a snapshot with 'spor label <ref> <name>'.")
+		fmt.Fprintln(out, styleMuted.Render("No labels yet. Name a snapshot with 'spor label <ref> <name>'."))
 		return nil
 	}
 
@@ -104,13 +104,12 @@ func runLabelList(ctx context.Context, cmd *cobra.Command, eng *core.Engine) err
 	}
 	short := shortLen(ids)
 
-	w := colorprofile.NewWriter(out, os.Environ())
 	for _, l := range labels {
 		id := l.StateID
 		if len(id) > short {
 			id = id[:short]
 		}
-		fmt.Fprintln(w, styleLabel.Render(l.Name)+"  "+
+		fmt.Fprintln(out, styleLabel.Render(l.Name)+"  "+
 			styleID.Render(id)+"  "+styleTime.Render(humanizeSince(l.CreatedAt)))
 	}
 	return nil

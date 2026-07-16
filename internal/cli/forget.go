@@ -55,14 +55,15 @@ func newForgetCmd() *cobra.Command {
 				return err
 			}
 
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd)
 			if !yes {
-				fmt.Fprintf(out, "This permanently deletes the spor store at %s\n", stats.StoreDir)
-				fmt.Fprintf(out, "  %d %s, %s of history and blobs.\n",
-					stats.StateCount, plural(stats.StateCount, "snapshot", "snapshots"), humanBytes(stats.Bytes))
-				fmt.Fprintln(out, "  Your working files are left untouched. This cannot be undone.")
+				fmt.Fprintf(out, "This permanently deletes the spor store at %s\n", styleAccent.Render(stats.StoreDir))
+				fmt.Fprintf(out, "  %s, %s of history and blobs.\n",
+					styleBad.Render(fmt.Sprintf("%d %s", stats.StateCount, plural(stats.StateCount, "snapshot", "snapshots"))),
+					styleAccent.Render(humanBytes(stats.Bytes)))
+				fmt.Fprintln(out, styleMuted.Render("  Your working files are left untouched. ")+styleBad.Render("This cannot be undone."))
 				if !promptYesNo(cmd.InOrStdin(), out, "Delete the store?") {
-					fmt.Fprintln(out, "Aborted; nothing was deleted.")
+					fmt.Fprintln(out, styleBad.Render("Aborted; nothing was deleted."))
 					return nil
 				}
 			}
@@ -70,7 +71,7 @@ func newForgetCmd() *cobra.Command {
 			if err := eng.Forget(ctx); err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "Deleted the spor store; %s is no longer tracked.\n", root)
+			fmt.Fprintf(out, "Deleted the spor store; %s is no longer tracked.\n", styleAccent.Render(root))
 			return nil
 		},
 	}

@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
@@ -39,8 +38,7 @@ func newVerifyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := colorprofile.NewWriter(cmd.OutOrStdout(), os.Environ())
-			renderVerify(out, res)
+			renderVerify(styledOut(cmd), res)
 			if !res.OK() {
 				// Non-zero exit for scripts; the details are already printed above.
 				return fmt.Errorf("verification found %d %s",

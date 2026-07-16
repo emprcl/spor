@@ -46,19 +46,19 @@ func newFoldCmd() *cobra.Command {
 				return err
 			}
 
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd)
 			if !yes {
 				lost := plan.StatesFolded - 1
-				fmt.Fprintf(out, "Folding %s..%s squashes %d %s into one, losing %d intermediate %s.\n",
-					abbrev(plan.From), abbrev(plan.To),
-					plan.StatesFolded, plural(plan.StatesFolded, "snapshot", "snapshots"),
-					lost, plural(lost, "snapshot", "snapshots"))
+				fmt.Fprintf(out, "Folding %s..%s squashes %s into one, losing %s.\n",
+					styleAccent.Render(abbrev(plan.From)), styleAccent.Render(abbrev(plan.To)),
+					styleGood.Render(fmt.Sprintf("%d %s", plan.StatesFolded, plural(plan.StatesFolded, "snapshot", "snapshots"))),
+					styleBad.Render(fmt.Sprintf("%d intermediate %s", lost, plural(lost, "snapshot", "snapshots"))))
 				if plan.HeadWillMove {
-					fmt.Fprintln(out, "  HEAD will move to the folded snapshot and your working files will change to match.")
+					fmt.Fprintln(out, styleMuted.Render("  HEAD will move to the folded snapshot and your working files will change to match."))
 				}
-				fmt.Fprintln(out, "  This cannot be undone.")
+				fmt.Fprintln(out, styleBad.Render("  This cannot be undone."))
 				if !promptYesNo(cmd.InOrStdin(), out, "Fold?") {
-					fmt.Fprintln(out, "Aborted; nothing was folded.")
+					fmt.Fprintln(out, styleBad.Render("Aborted; nothing was folded."))
 					return nil
 				}
 			}
@@ -68,12 +68,13 @@ func newFoldCmd() *cobra.Command {
 				return err
 			}
 			if res.Settled {
-				fmt.Fprintf(out, "recorded current changes as %s\n", res.SettledID)
+				fmt.Fprintf(out, "recorded current changes as %s\n", styleAccent.Render(res.SettledID))
 			}
-			fmt.Fprintf(out, "Folded %d %s into %s.\n",
-				res.Dropped, plural(res.Dropped, "snapshot", "snapshots"), abbrev(res.Folded))
+			fmt.Fprintf(out, "Folded %s into %s.\n",
+				styleBad.Render(fmt.Sprintf("%d %s", res.Dropped, plural(res.Dropped, "snapshot", "snapshots"))),
+				styleAccent.Render(abbrev(res.Folded)))
 			if res.HeadMovedTo != "" {
-				fmt.Fprintf(out, "HEAD is now %s.\n", abbrev(res.HeadMovedTo))
+				fmt.Fprintf(out, "HEAD is now %s.\n", styleAccent.Render(abbrev(res.HeadMovedTo)))
 			}
 			reportReclaimed(out, res.Reclaimed)
 			return nil
