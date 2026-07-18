@@ -9,6 +9,7 @@ import (
 // Command groups for `spor --help`, ordered most-used first and grouped by
 // feature (mirroring docs/design-spec.md §6) instead of the default alphabetical list.
 const (
+	groupUI          = "ui"
 	groupEveryday    = "everyday"
 	groupInspect     = "inspect"
 	groupHistory     = "history"
@@ -34,14 +35,17 @@ func Root() *cobra.Command {
 			"Some files are never recorded: build artifacts, editor temp files, and .git " +
 			"are skipped by default. Add a .sporignore file at the project root (gitignore " +
 			"syntax) to exclude more, or negate a default with '!' to re-include it.",
-		Example: `  # Watch the project and snapshot automatically as you work
+		Example: `  # Open the interactive view (it offers to record as you work)
+  spor ui
+
+  # Or record in the background of a spare terminal
   spor watch
 
   # See the history, then jump back to how things were 2 hours ago
   spor log
   spor go 2h
 
-  # Save one snapshot by hand (only needed when watch isn't running)
+  # Save one snapshot by hand (only needed when nothing is watching)
   spor snap`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -56,6 +60,7 @@ func Root() *cobra.Command {
 	}
 
 	root.AddGroup(
+		&cobra.Group{ID: groupUI, Title: "Interactive"},
 		&cobra.Group{ID: groupEveryday, Title: "Common"},
 		&cobra.Group{ID: groupInspect, Title: "Naming & inspecting"},
 		&cobra.Group{ID: groupHistory, Title: "History editing"},
@@ -73,6 +78,8 @@ func Root() *cobra.Command {
 		}
 	}
 
+	addGroup(groupUI,
+		newUICmd())
 	addGroup(groupEveryday,
 		newWatchCmd(), newSnapCmd(), newLogCmd(), newUndoCmd(), newRedoCmd(), newGoCmd(),
 		newPickCmd())

@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/textfmt"
 )
 
 // newFoldCmd builds `spor fold <a> <b>`, which squashes the linear range from the
@@ -50,15 +51,15 @@ func newFoldCmd() *cobra.Command {
 			if !yes {
 				lost := plan.StatesFolded - 1
 				fmt.Fprintf(out, "Folding %s..%s squashes %s into one, losing %s.\n",
-					styleAccent.Render(abbrev(plan.From)), styleAccent.Render(abbrev(plan.To)),
-					styleGood.Render(fmt.Sprintf("%d %s", plan.StatesFolded, plural(plan.StatesFolded, "snapshot", "snapshots"))),
-					styleBad.Render(fmt.Sprintf("%d intermediate %s", lost, plural(lost, "snapshot", "snapshots"))))
+					th.Accent.Render(textfmt.Abbrev(plan.From)), th.Accent.Render(textfmt.Abbrev(plan.To)),
+					th.Good.Render(fmt.Sprintf("%d %s", plan.StatesFolded, textfmt.Plural(plan.StatesFolded, "snapshot", "snapshots"))),
+					th.Bad.Render(fmt.Sprintf("%d intermediate %s", lost, textfmt.Plural(lost, "snapshot", "snapshots"))))
 				if plan.HeadWillMove {
-					fmt.Fprintln(out, styleMuted.Render("  HEAD will move to the folded snapshot and your working files will change to match."))
+					fmt.Fprintln(out, th.Muted.Render("  HEAD will move to the folded snapshot and your working files will change to match."))
 				}
-				fmt.Fprintln(out, styleBad.Render("  This cannot be undone."))
+				fmt.Fprintln(out, th.Bad.Render("  This cannot be undone."))
 				if !promptYesNo(cmd.InOrStdin(), out, "Fold?") {
-					fmt.Fprintln(out, styleBad.Render("Aborted; nothing was folded."))
+					fmt.Fprintln(out, th.Bad.Render("Aborted; nothing was folded."))
 					return nil
 				}
 			}
@@ -68,13 +69,13 @@ func newFoldCmd() *cobra.Command {
 				return err
 			}
 			if res.Settled {
-				fmt.Fprintf(out, "recorded current changes as %s\n", styleAccent.Render(res.SettledID))
+				fmt.Fprintf(out, "recorded current changes as %s\n", th.Accent.Render(res.SettledID))
 			}
 			fmt.Fprintf(out, "Folded %s into %s.\n",
-				styleBad.Render(fmt.Sprintf("%d %s", res.Dropped, plural(res.Dropped, "snapshot", "snapshots"))),
-				styleAccent.Render(abbrev(res.Folded)))
+				th.Bad.Render(fmt.Sprintf("%d %s", res.Dropped, textfmt.Plural(res.Dropped, "snapshot", "snapshots"))),
+				th.Accent.Render(textfmt.Abbrev(res.Folded)))
 			if res.HeadMovedTo != "" {
-				fmt.Fprintf(out, "HEAD is now %s.\n", styleAccent.Render(abbrev(res.HeadMovedTo)))
+				fmt.Fprintf(out, "HEAD is now %s.\n", th.Accent.Render(textfmt.Abbrev(res.HeadMovedTo)))
 			}
 			reportReclaimed(out, res.Reclaimed)
 			return nil

@@ -87,3 +87,60 @@ func resolve(t *testing.T, path string) string {
 	}
 	return r
 }
+
+// TestDataVersionTracksCommits checks the change probe: stable while nothing
+// writes, bumped by a commit from another connection in the same process (the
+// pool the operations run on), and bumped by a commit from a second engine (a
+// separate process in real use).
+func TestDataVersionTracksCommits(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	eng, err := OpenOrInit(ctx, root)
+	if err != nil {
+		t.Fatalf("OpenOrInit: %v", err)
+	}
+	defer eng.Close()
+
+	v1, err := eng.DataVersion(ctx)
+	if err != nil {
+		t.Fatalf("DataVersion: %v", err)
+	}
+	if v2, _ := eng.DataVersion(ctx); v2 != v1 {
+		t.Fatalf("idle probe moved: %d -> %d", v1, v2)
+	}
+
+	// A snapshot commits through the pool, a different connection than the probe's.
+	if _, err := eng.Snap(ctx, SnapOptions{}); err != nil {
+		t.Fatalf("Snap: %v", err)
+	}
+	v3, err := eng.DataVersion(ctx)
+	if err != nil {
+		t.Fatalf("DataVersion after snap: %v", err)
+	}
+	if v3 == v1 {
+		t.Fatal("probe did not move after an own-pool commit")
+	}
+
+	// A second engine on the same store stands in for another process.
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("two"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	eng2, err := OpenOrInit(ctx, root)
+	if err != nil {
+		t.Fatalf("second OpenOrInit: %v", err)
+	}
+	defer eng2.Close()
+	if _, err := eng2.Snap(ctx, SnapOptions{}); err != nil {
+		t.Fatalf("second engine Snap: %v", err)
+	}
+	v4, err := eng.DataVersion(ctx)
+	if err != nil {
+		t.Fatalf("DataVersion after external snap: %v", err)
+	}
+	if v4 == v3 {
+		t.Fatal("probe did not move after an external commit")
+	}
+}

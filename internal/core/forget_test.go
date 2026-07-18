@@ -103,3 +103,35 @@ func TestForgetWaitsForWriteLock(t *testing.T) {
 		t.Errorf("store still present after forget: err=%v", err)
 	}
 }
+
+// TestForgetStatsHeadBehind checks the prompt data knows whether @ is the last
+// saved snapshot: at the tip it is not behind; after rewinding, the snapshots
+// saved after @ are counted.
+func TestForgetStatsHeadBehind(t *testing.T) {
+	eng, root := newTestEngine(t)
+	ctx := context.Background()
+
+	write(t, root, "a.txt", "one")
+	snap(t, eng)
+	write(t, root, "a.txt", "two")
+	snap(t, eng)
+
+	stats, err := eng.ForgetStats(ctx)
+	if err != nil {
+		t.Fatalf("ForgetStats: %v", err)
+	}
+	if stats.HeadBehind || stats.NewerStates != 0 {
+		t.Fatalf("at the tip: HeadBehind=%v NewerStates=%d, want false/0", stats.HeadBehind, stats.NewerStates)
+	}
+
+	if _, err := eng.Undo(ctx, 1); err != nil {
+		t.Fatalf("Undo: %v", err)
+	}
+	stats, err = eng.ForgetStats(ctx)
+	if err != nil {
+		t.Fatalf("ForgetStats after undo: %v", err)
+	}
+	if !stats.HeadBehind || stats.NewerStates != 1 {
+		t.Fatalf("after undo: HeadBehind=%v NewerStates=%d, want true/1", stats.HeadBehind, stats.NewerStates)
+	}
+}

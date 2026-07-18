@@ -19,11 +19,11 @@ _Feel free to [open an issue](https://github.com/emprcl/spor/issues/new)._
 
 It works differently from traditional version control like
 [Git](https://git-scm.com/). There are no commits to write, nothing to stage, no
-branches to manage. Instead, you leave `spor watch` running while you work: it
+branches to manage. Instead, Spor watches your project while you work: it
 automatically saves a snapshot every time something changes (recording stops
-when you stop watching). You can jump back to any past moment, pick up from
-there, and go a different way. You can think of it as infinite undo for your
-whole project.
+when you stop watching), building up your history as a tree you can navigate.
+You can jump back to any past moment, pick up from there, and go a different
+way. You can think of it as infinite undo for your whole project.
 
 Everything is automatic and local. Spor records your history as an immutable
 graph of snapshots as you work, storing each unique file once (deduplicated and
@@ -128,29 +128,83 @@ just works once you're inside a tracked project.
 
 ### Walkthrough
 
-Say you're starting work on a project. `cd` into it and leave the watcher
-running while you work:
+The same session, two ways: first inside the interactive view (`spor ui`),
+then with one-shot commands. Both work on the same history and mix freely — a
+command run from another terminal shows up in an open `spor ui` within a
+second.
+
+#### In the interactive view
+
+<p align="center">
+  <img src="/docs/tui.png">
+</p>
+
+Say you're starting work on a project. `cd` into it and open the interactive
+view:
+
+```sh
+cd my-project
+spor ui
+```
+
+It offers to watch the project; say yes and leave it open in a terminal off to
+the side. That's it, there's nothing to configure. Every time you save a file,
+Spor waits for things to settle and records a snapshot automatically, and the
+history tree repaints live as snapshots land, with `@` marking where you are
+and a side panel detailing the selected snapshot.
+
+You try something that seems worth being able to get back to easily later, so
+you name it: press `l`, type `before-refactor`, and hit enter. The name now
+shows next to that snapshot in the tree.
+
+You keep iterating. An hour later you've gone down a path that isn't working.
+Rather than manually undoing your edits, move down the tree with the arrow
+keys (or `j`/`k`) until you reach `before-refactor`, and press `enter`. Your
+files are instantly restored to exactly how they were at that point; whatever
+you hadn't snapshotted yet was recorded first, so nothing is lost, and you can
+jump back the same way. From here you just keep working: your next save starts
+a new timeline, and the tree shows the two side by side.
+
+Curious what a snapshot actually changed? `d` opens a full-screen diff of it
+against the one before. Maybe there's one file from the abandoned attempt you
+still want, without pulling back everything else: `p` opens a search over that
+snapshot's files; pick `config.yaml` and only that file comes back.
+
+If you took a wrong turn, `u` and `r` step you back and forth one snapshot at
+a time. And once a direction is clearly done, `x` permanently deletes the
+selected snapshot and everything after it, `t` throws away everything before
+it, `f` folds a run of hidden snapshots into one, and `T` collapses every
+linear run at once, keeping only your tips, branch points, and named
+snapshots. Destructive actions always show exactly what they'll delete and
+ask first.
+
+`w` toggles watching, `s` records a snapshot by hand while not watching, `?`
+lists every key, and `q` quits (watching stops with it).
+
+#### From the command line
+
+The same session again, without the interactive view. Start recording with
+`spor watch`, which does only that, streaming one line per snapshot (handy in
+a spare terminal or redirected to a log file), and leave it running:
 
 ```sh
 cd my-project
 spor watch
 ```
 
-That's it, there's nothing to configure. Every time you save a file, Spor
-waits for things to settle and records a snapshot automatically. Leave it
-running in a terminal off to the side; `spor watch` shows the history
-repainting live as new snapshots land, with `@` marking where you are.
+Everything below runs from another terminal, inside the same project. (You
+can also skip the watcher entirely and just run `spor snap` whenever you want
+a snapshot.)
 
 You try something that seems worth being able to get back to easily later, so
-you name it from another terminal:
+you name it:
 
 ```sh
 spor label @ before-refactor
 ```
 
-That snapshot now has a name. `spor log`, the same history `spor watch` shows
-live, lists it alongside the others, newest first, with `@` marking where you
-are:
+That snapshot now has a name. `spor log` lists it alongside the others,
+newest first, with `@` marking where you are:
 
 ```text
 01KXNZQD5N     now before-refactor (@) ●
@@ -205,17 +259,17 @@ in a new direction, and `spor log` shows the two timelines side by side:
 01KXNZQD4M  1h ago                 ●
 ```
 
-Curious what actually changed between the two?
+Curious what you've changed since `before-refactor`?
 
 ```sh
 spor diff before-refactor
 ```
 
 Maybe there's one file from the abandoned attempt you still want, without
-pulling back everything else:
+pulling back everything else. Any snapshot id from `spor log` works as a ref:
 
 ```sh
-spor pick @~4 config.yaml
+spor pick 01KXNZQD81 config.yaml
 ```
 
 If you took a wrong turn, `spor undo` (and `spor redo`) step you back and
@@ -229,15 +283,20 @@ want a clean slate, `spor forget` wipes Spor's history for the project, keeping
 your files exactly as they are.
 
 That's the whole workflow: watch, work, and reach back into history whenever
-you need to. See the full command reference below, or `spor --help` /
-`spor <command> --help` for the same thing from your terminal.
+you need to, from inside `spor ui` or with the commands below. See the full
+command reference below, or `spor --help` / `spor <command> --help` for the
+same thing from your terminal.
 
 ### Commands
 
+**Interactive**
+
+- `spor ui`: open the interactive view; it offers to watch on startup (`--watch`/`--browse` picks the mode and skips the offer), `w` toggles watching, and every command below has a key inside it (`?` lists them, `q` quits)
+
 **Common**
 
-- `spor watch`: watch the project and snapshot it automatically as you work (Ctrl+C to stop)
-- `spor snap [-l <name>]`: save one snapshot by hand, optionally naming it (only needed when `watch` isn't running)
+- `spor watch`: watch the project and snapshot it automatically, streaming one line per snapshot (Ctrl+C to stop)
+- `spor snap [-l <name>]`: save one snapshot by hand, optionally naming it (only needed when nothing is watching)
 - `spor log`: show the project history, newest first, with `@` marking where you are
 - `spor undo [n]`: step back `n` snapshots (default 1); reversible with `redo`
 - `spor redo [n]`: step forward `n` snapshots (default 1) after an `undo`
@@ -274,7 +333,7 @@ label. Run `spor <command> --help` for the full details and more examples.
 
 ### Ignoring files
 
-`.spor/`, spor's own store, is always excluded. On top of that, a few
+`.spor/`, Spor's own store, is always excluded. On top of that, a few
 common, high-churn or huge directories are ignored by default, so a first
 snapshot never sweeps them in: `.git/`, editor/OS temp files (`*.tmp`, `*~`,
 `*.swp`, `*.swo`, `.DS_Store`), and directories like `node_modules/`,
@@ -284,7 +343,7 @@ To exclude anything else, add a `.sporignore` file at the project root, using
 the same syntax as `.gitignore` (globs, `**`, directory-only `foo/`, `#`
 comments, and `!` negation). It's applied on top of the defaults, so you can
 re-include one with a negation, e.g. `!build/` if that's where your sources
-actually live. `.sporignore` is itself tracked, like `.gitignore`, and spor
+actually live. `.sporignore` is itself tracked, like `.gitignore`, and Spor
 never creates it: it's entirely opt-in.
 
 ## Documentation

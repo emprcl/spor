@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	_ "modernc.org/sqlite" // pure-Go driver, registers as "sqlite"
 
@@ -36,6 +37,11 @@ type Engine struct {
 	db    *sql.DB
 	q     *gen.Queries
 	blobs *blob.Store
+
+	// probeConn is the dedicated connection DataVersion reads through, pinned
+	// out of the pool because the pragma it reads is per-connection.
+	probeMu   sync.Mutex
+	probeConn *sql.Conn
 }
 
 // Discover walks up from start looking for an existing project store (a .spor
@@ -211,7 +217,40 @@ func openAt(ctx context.Context, root string) (*Engine, error) {
 
 // Close releases the store.
 func (e *Engine) Close() error {
+	e.probeMu.Lock()
+	if e.probeConn != nil {
+		_ = e.probeConn.Close()
+		e.probeConn = nil
+	}
+	e.probeMu.Unlock()
 	return e.db.Close()
+}
+
+// DataVersion returns SQLite's data_version counter as seen by a dedicated
+// probe connection. The counter changes whenever any *other* connection
+// commits, pooled in this process or in another process entirely, which makes
+// it a near-free "has anything changed?" check for a front-end that wants to
+// reload only when history actually moved (the TUI's background refresh). The
+// connection is opened lazily and pinned, because the pragma is per-connection:
+// values read from different pooled connections are not comparable.
+func (e *Engine) DataVersion(ctx context.Context) (int64, error) {
+	e.probeMu.Lock()
+	defer e.probeMu.Unlock()
+	if e.probeConn == nil {
+		conn, err := e.db.Conn(ctx)
+		if err != nil {
+			return 0, err
+		}
+		e.probeConn = conn
+	}
+	var v int64
+	if err := e.probeConn.QueryRowContext(ctx, "PRAGMA data_version").Scan(&v); err != nil {
+		// Drop a broken connection so the next probe starts fresh.
+		_ = e.probeConn.Close()
+		e.probeConn = nil
+		return 0, err
+	}
+	return v, nil
 }
 
 // Root returns the project root directory (the parent of .spor). The watcher

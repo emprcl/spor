@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/textfmt"
 )
 
 // newThinCmd builds `spor thin`, which reduces the whole history to its
@@ -48,18 +49,18 @@ func newThinCmd() *cobra.Command {
 			}
 			out := styledOut(cmd)
 			if plan.IsNoop {
-				fmt.Fprintln(out, styleMuted.Render("Nothing to thin; the history is already all tips and branch points."))
+				fmt.Fprintln(out, th.Muted.Render("Nothing to thin; the history is already all tips and branch points."))
 				return nil
 			}
 
 			if !yes {
 				fmt.Fprintf(out, "Thinning keeps %s and drops %s.\n",
-					styleGood.Render(fmt.Sprintf("%d %s", plan.StatesKept, plural(plan.StatesKept, "snapshot", "snapshots"))),
-					styleBad.Render(fmt.Sprintf("%d linear %s", plan.StatesToDrop, plural(plan.StatesToDrop, "snapshot", "snapshots"))))
-				fmt.Fprintln(out, styleMuted.Render("  Tips, branch points, labels, and @ are kept; your working files are left untouched."))
-				fmt.Fprintln(out, styleBad.Render("  This cannot be undone."))
+					th.Good.Render(fmt.Sprintf("%d %s", plan.StatesKept, textfmt.Plural(plan.StatesKept, "snapshot", "snapshots"))),
+					th.Bad.Render(fmt.Sprintf("%d linear %s", plan.StatesToDrop, textfmt.Plural(plan.StatesToDrop, "snapshot", "snapshots"))))
+				fmt.Fprintln(out, th.Muted.Render("  Tips, branch points, labels, and @ are kept; your working files are left untouched."))
+				fmt.Fprintln(out, th.Bad.Render("  This cannot be undone."))
 				if !promptYesNo(cmd.InOrStdin(), out, "Thin?") {
-					fmt.Fprintln(out, styleBad.Render("Aborted; nothing was dropped."))
+					fmt.Fprintln(out, th.Bad.Render("Aborted; nothing was dropped."))
 					return nil
 				}
 			}
@@ -69,8 +70,8 @@ func newThinCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "Thinned; dropped %s, kept %s.\n",
-				styleBad.Render(fmt.Sprintf("%d %s", res.Dropped, plural(res.Dropped, "snapshot", "snapshots"))),
-				styleGood.Render(fmt.Sprintf("%d", res.Kept)))
+				th.Bad.Render(fmt.Sprintf("%d %s", res.Dropped, textfmt.Plural(res.Dropped, "snapshot", "snapshots"))),
+				th.Good.Render(fmt.Sprintf("%d", res.Kept)))
 			reportReclaimed(out, res.Reclaimed)
 			return nil
 		},

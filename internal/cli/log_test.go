@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/view"
 )
 
 var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
@@ -172,11 +173,11 @@ func TestRenderLogFoldsLongRun(t *testing.T) {
 	}
 	for _, c := range []byte{'D', 'C', 'B'} { // the folded interior states
 		if strings.Contains(out, strings.Repeat(string(c), short)) {
-			t.Errorf("expected state %c to be folded away:\n%s", c, out)
+			t.Errorf("expected state %c to be hidden away:\n%s", c, out)
 		}
 	}
-	if !strings.Contains(out, "3 snaps folded") {
-		t.Errorf("expected a fold summary of 3 snaps:\n%s", out)
+	if !strings.Contains(out, "3 snaps hidden") {
+		t.Errorf("expected a hidden-run summary of 3 snaps:\n%s", out)
 	}
 }
 
@@ -184,8 +185,8 @@ func TestRenderLogNoFoldWhenShort(t *testing.T) {
 	// 5 linear states: @, root, and a 3-long interior run (not over the threshold),
 	// so nothing folds and every state is shown.
 	out := renderPlain(linearHistory(5))
-	if strings.Contains(out, "folded") {
-		t.Errorf("a 3-state run should not fold:\n%s", out)
+	if strings.Contains(out, "hidden") {
+		t.Errorf("a 3-state run should not be hidden:\n%s", out)
 	}
 	for i := 0; i < 5; i++ {
 		if !strings.Contains(out, strings.Repeat(string(rune('A'+i)), 7)) {
@@ -201,34 +202,10 @@ func TestRenderLogEmpty(t *testing.T) {
 }
 
 func TestShortLen(t *testing.T) {
-	if got := shortLen([]string{"ABCDEFGHIJ", "BBCDEFGHIJ"}); got != 7 {
+	if got := view.ShortLen([]string{"ABCDEFGHIJ", "BBCDEFGHIJ"}); got != 7 {
 		t.Errorf("distinct-first-char shortLen = %d, want 7 (floor)", got)
 	}
-	if got := shortLen([]string{"AAAAAAAAA1", "AAAAAAAAA2"}); got != 10 {
+	if got := view.ShortLen([]string{"AAAAAAAAA1", "AAAAAAAAA2"}); got != 10 {
 		t.Errorf("shared-9-prefix shortLen = %d, want 10", got)
-	}
-}
-
-func TestHumanizeSince(t *testing.T) {
-	now := time.Now()
-	cases := []struct {
-		d    time.Duration
-		want string
-	}{
-		{10 * time.Second, "10s ago"},
-		{5 * time.Minute, " 5m ago"},
-		{59 * time.Minute, "59m ago"},
-		{3 * time.Hour, " 3h ago"},
-		{50 * time.Hour, " 2d ago"},
-		{9 * 7 * 24 * time.Hour, " 9w ago"},
-		{400 * 24 * time.Hour, " 1y ago"},
-	}
-	for _, c := range cases {
-		if got := humanizeSince(now.Add(-c.d)); got != c.want {
-			t.Errorf("humanizeSince(-%s) = %q, want %q", c.d, got, c.want)
-		}
-		if len(c.want) != timeFieldWidth {
-			t.Errorf("case %s want %q has width %d, want fixed %d", c.d, c.want, len(c.want), timeFieldWidth)
-		}
 	}
 }

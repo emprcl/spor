@@ -30,15 +30,36 @@ import (
 // batched sync is far cheaper than one fsync per blob.
 const syncBatchThreshold = 64
 
+// SnapPhase names the stage a running snapshot is in, so a front-end can keep
+// showing motion through the parts that would otherwise read as a freeze: the
+// initial walk (before any file content is touched) and the durability sync and
+// state commit after the last file is stored.
+type SnapPhase int
+
+const (
+	// SnapScan is the tree walk: done is the number of tracked files found so
+	// far, total is 0 (unknown until the walk finishes).
+	SnapScan SnapPhase = iota
+	// SnapStore is reading and storing content: done/total are files
+	// processed/tracked.
+	SnapStore
+	// SnapSync is the single whole-store durability sync after a bulk store.
+	// It is one blocking syscall, so done and total are 0 (indeterminate).
+	SnapSync
+	// SnapCommit is writing the state and its manifest: done/total are
+	// manifest entries written.
+	SnapCommit
+)
+
 // SnapOptions configures a snapshot.
 type SnapOptions struct {
 	Label string // optional human name for the created state
-	// OnProgress, if set, is called as the walk's files are processed, with the
-	// number handled so far and the total tracked. It runs from the snapshot's
-	// worker goroutines (concurrently), so it must be cheap and safe to call
-	// from multiple goroutines. It exists so a front-end can show first-snap
-	// progress instead of a blank screen (see cli watch).
-	OnProgress func(done, total int)
+	// OnProgress, if set, is called as the snapshot advances, with the current
+	// phase and that phase's progress counts (see SnapPhase). During SnapStore
+	// it runs from the snapshot's worker goroutines (concurrently), so it must
+	// be cheap and safe to call from multiple goroutines. It exists so a
+	// front-end can show first-snap progress instead of a blank screen.
+	OnProgress func(phase SnapPhase, done, total int)
 }
 
 // SnapResult reports the outcome. When Created is false the working tree
@@ -85,8 +106,20 @@ func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, 
 		}
 	}
 
-	// Walk → store blobs → build the manifest (in sorted path order).
-	files, err := walk.Walk(e.root)
+	progress := func(phase SnapPhase, done, total int) {
+		if opts.OnProgress != nil {
+			opts.OnProgress(phase, done, total)
+		}
+	}
+
+	// Walk → store blobs → build the manifest (in sorted path order). The walk
+	// reports every file it finds, so a big tree scans visibly instead of
+	// freezing before the first store-phase update.
+	var onFound func(int)
+	if opts.OnProgress != nil {
+		onFound = func(n int) { progress(SnapScan, n, 0) }
+	}
+	files, err := walk.WalkProgress(e.root, onFound)
 	if err != nil {
 		return SnapResult{}, err
 	}
@@ -149,7 +182,7 @@ func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, 
 	}
 	report := func() {
 		if opts.OnProgress != nil {
-			opts.OnProgress(int(atomic.AddInt64(&done, 1)), total)
+			progress(SnapStore, int(atomic.AddInt64(&done, 1)), total)
 		}
 	}
 
@@ -200,8 +233,11 @@ func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, 
 	}
 	// Make every blob the batch stored durable (content and rename) before the
 	// state that references them is committed (docs/design-spec.md §8). A nil
-	// batch already fsynced each blob inline, so there is nothing to flush.
+	// batch already fsynced each blob inline, so there is nothing to flush. The
+	// sync is one blocking whole-store syscall that can take seconds after a big
+	// first snapshot, so announce it rather than sitting at 100% stored.
 	if batch != nil {
+		progress(SnapSync, 0, 0)
 		if err := batch.Flush(); err != nil {
 			return SnapResult{}, err
 		}
@@ -248,7 +284,7 @@ func (e *Engine) snapLocked(ctx context.Context, opts SnapOptions) (SnapResult, 
 	}
 
 	id := ulid.Make().String()
-	if err := e.commitState(ctx, id, head, manifestHash, opts.Label, entries, upserts, cacheDeletes); err != nil {
+	if err := e.commitState(ctx, id, head, manifestHash, opts.Label, entries, upserts, cacheDeletes, progress); err != nil {
 		return SnapResult{}, err
 	}
 	return SnapResult{Created: true, StateID: id}, nil
@@ -299,7 +335,9 @@ func (e *Engine) updateStatCache(
 
 // commitState inserts the state row, its manifest entries, and the stat-cache
 // changes, and advances HEAD, in a single transaction. All referenced blobs are
-// already written and verified.
+// already written and verified. progress is reported per manifest entry
+// (SnapCommit): on a first snapshot over a big tree these inserts are the last
+// visible stretch of work.
 func (e *Engine) commitState(
 	ctx context.Context,
 	id string,
@@ -308,6 +346,7 @@ func (e *Engine) commitState(
 	entries []manifestEntry,
 	cacheUpserts []gen.UpsertStatCacheEntryParams,
 	cacheDeletes []string,
+	progress func(phase SnapPhase, done, total int),
 ) error {
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -325,7 +364,7 @@ func (e *Engine) commitState(
 	}); err != nil {
 		return fmt.Errorf("creating state: %w", err)
 	}
-	for _, ent := range entries {
+	for i, ent := range entries {
 		if err := q.AddManifestEntry(ctx, gen.AddManifestEntryParams{
 			StateID:    id,
 			Path:       ent.path,
@@ -334,6 +373,7 @@ func (e *Engine) commitState(
 		}); err != nil {
 			return fmt.Errorf("adding manifest entry %s: %w", ent.path, err)
 		}
+		progress(SnapCommit, i+1, len(entries))
 	}
 	if err := applyStatCache(ctx, q, cacheUpserts, cacheDeletes); err != nil {
 		return err

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/textfmt"
 )
 
 // newPickCmd builds `spor pick <ref> <path>`, which brings one file (or
@@ -53,17 +54,17 @@ func newPickCmd() *cobra.Command {
 			}
 			out := styledOut(cmd)
 			if res.Settled {
-				fmt.Fprintf(out, "recorded current changes as %s\n", styleAccent.Render(res.SettledID))
+				fmt.Fprintf(out, "recorded current changes as %s\n", th.Accent.Render(res.SettledID))
 			}
 			if res.Written == 0 {
-				fmt.Fprintln(out, styleMuted.Render(fmt.Sprintf("%s already matches %s; nothing to pick", rel, abbrev(res.Target))))
+				fmt.Fprintln(out, th.Muted.Render(fmt.Sprintf("%s already matches %s; nothing to pick", rel, textfmt.Abbrev(res.Target))))
 				return nil
 			}
 			fmt.Fprintf(out, "picked %s from %s (%s)\n",
-				styleAccent.Render(rel), styleAccent.Render(abbrev(res.Target)),
-				styleGood.Render(fmt.Sprintf("%d %s", res.Written, plural(res.Written, "file", "files"))))
+				th.Accent.Render(rel), th.Accent.Render(textfmt.Abbrev(res.Target)),
+				th.Good.Render(fmt.Sprintf("%d %s", res.Written, textfmt.Plural(res.Written, "file", "files"))))
 			if res.Created {
-				fmt.Fprintf(out, "recorded as %s\n", styleAccent.Render(res.StateID))
+				fmt.Fprintf(out, "recorded as %s\n", th.Accent.Render(res.StateID))
 			}
 			return nil
 		},

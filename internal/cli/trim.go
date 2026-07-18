@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/textfmt"
 )
 
 // newTrimCmd builds `spor trim <ref>`, the dual of drop: it keeps only
@@ -46,21 +47,21 @@ func newTrimCmd() *cobra.Command {
 			}
 			out := styledOut(cmd)
 			if plan.IsNoop {
-				fmt.Fprintln(out, styleMuted.Render(fmt.Sprintf("%s already contains the whole history; nothing to drop.", abbrev(plan.Target))))
+				fmt.Fprintln(out, th.Muted.Render(fmt.Sprintf("%s already contains the whole history; nothing to drop.", textfmt.Abbrev(plan.Target))))
 				return nil
 			}
 
 			if !yes {
 				fmt.Fprintf(out, "Trimming to %s keeps %s and drops %s.\n",
-					styleAccent.Render(abbrev(plan.Target)),
-					styleGood.Render(fmt.Sprintf("%d %s", plan.StatesKept, plural(plan.StatesKept, "snapshot", "snapshots"))),
-					styleBad.Render(fmt.Sprintf("%d %s", plan.StatesToDrop, plural(plan.StatesToDrop, "snapshot", "snapshots"))))
+					th.Accent.Render(textfmt.Abbrev(plan.Target)),
+					th.Good.Render(fmt.Sprintf("%d %s", plan.StatesKept, textfmt.Plural(plan.StatesKept, "snapshot", "snapshots"))),
+					th.Bad.Render(fmt.Sprintf("%d %s", plan.StatesToDrop, textfmt.Plural(plan.StatesToDrop, "snapshot", "snapshots"))))
 				if plan.HeadWillMove {
-					fmt.Fprintln(out, styleMuted.Render("  You are on a branch being dropped; HEAD will move to the new root and your working files will change to match."))
+					fmt.Fprintln(out, th.Muted.Render("  You are on a branch being dropped; HEAD will move to the new root and your working files will change to match."))
 				}
-				fmt.Fprintln(out, styleBad.Render("  This cannot be undone."))
+				fmt.Fprintln(out, th.Bad.Render("  This cannot be undone."))
 				if !promptYesNo(cmd.InOrStdin(), out, "Trim?") {
-					fmt.Fprintln(out, styleBad.Render("Aborted; nothing was dropped."))
+					fmt.Fprintln(out, th.Bad.Render("Aborted; nothing was dropped."))
 					return nil
 				}
 			}
@@ -70,11 +71,11 @@ func newTrimCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "Trimmed to %s; dropped %s, kept %s.\n",
-				styleAccent.Render(abbrev(res.Target)),
-				styleBad.Render(fmt.Sprintf("%d %s", res.Dropped, plural(res.Dropped, "snapshot", "snapshots"))),
-				styleGood.Render(fmt.Sprintf("%d", res.Kept)))
+				th.Accent.Render(textfmt.Abbrev(res.Target)),
+				th.Bad.Render(fmt.Sprintf("%d %s", res.Dropped, textfmt.Plural(res.Dropped, "snapshot", "snapshots"))),
+				th.Good.Render(fmt.Sprintf("%d", res.Kept)))
 			if res.HeadMovedTo != "" {
-				fmt.Fprintf(out, "HEAD is now %s.\n", styleAccent.Render(abbrev(res.HeadMovedTo)))
+				fmt.Fprintf(out, "HEAD is now %s.\n", th.Accent.Render(textfmt.Abbrev(res.HeadMovedTo)))
 			}
 			reportReclaimed(out, res.Reclaimed)
 			return nil

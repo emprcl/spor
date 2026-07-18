@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/textfmt"
 )
 
 // newForgetCmd builds `spor forget`, the escape hatch out of "infinite undo": it
@@ -57,13 +58,20 @@ func newForgetCmd() *cobra.Command {
 
 			out := styledOut(cmd)
 			if !yes {
-				fmt.Fprintf(out, "This permanently deletes the spor store at %s\n", styleAccent.Render(stats.StoreDir))
+				fmt.Fprintf(out, "This permanently deletes the spor store at %s\n", th.Accent.Render(stats.StoreDir))
 				fmt.Fprintf(out, "  %s, %s of history and blobs.\n",
-					styleBad.Render(fmt.Sprintf("%d %s", stats.StateCount, plural(stats.StateCount, "snapshot", "snapshots"))),
-					styleAccent.Render(humanBytes(stats.Bytes)))
-				fmt.Fprintln(out, styleMuted.Render("  Your working files are left untouched. ")+styleBad.Render("This cannot be undone."))
+					th.Bad.Render(fmt.Sprintf("%d %s", stats.StateCount, textfmt.Plural(stats.StateCount, "snapshot", "snapshots"))),
+					th.Accent.Render(textfmt.HumanBytes(stats.Bytes)))
+				if stats.HeadBehind {
+					fmt.Fprintln(out, th.Bad.Render(fmt.Sprintf(
+						"  Your files match an older snapshot, not the last one saved: the %d %s saved after it %s deleted too.",
+						stats.NewerStates,
+						textfmt.Plural(stats.NewerStates, "snapshot", "snapshots"),
+						textfmt.Plural(stats.NewerStates, "is", "are"))))
+				}
+				fmt.Fprintln(out, th.Muted.Render("  Your working files are left untouched. ")+th.Bad.Render("This cannot be undone."))
 				if !promptYesNo(cmd.InOrStdin(), out, "Delete the store?") {
-					fmt.Fprintln(out, styleBad.Render("Aborted; nothing was deleted."))
+					fmt.Fprintln(out, th.Bad.Render("Aborted; nothing was deleted."))
 					return nil
 				}
 			}
@@ -71,7 +79,7 @@ func newForgetCmd() *cobra.Command {
 			if err := eng.Forget(ctx); err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "Deleted the spor store; %s is no longer tracked.\n", styleAccent.Render(root))
+			fmt.Fprintf(out, "Deleted the spor store; %s is no longer tracked.\n", th.Accent.Render(root))
 			return nil
 		},
 	}
@@ -93,26 +101,4 @@ func promptYesNo(in io.Reader, out io.Writer, question string) bool {
 	default:
 		return false
 	}
-}
-
-// humanBytes formats a byte count with a binary (1024) unit suffix.
-func humanBytes(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := int64(unit), 0
-	for m := n / unit; m >= unit; m /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
-}
-
-// plural picks the singular or plural word for a count.
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }

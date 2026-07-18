@@ -24,6 +24,26 @@ type PickResult struct {
 	StateID   string
 }
 
+// Files returns the slash-separated, root-relative paths tracked by ref's
+// snapshot, in manifest (sorted) order. It exists so a front-end can offer the
+// actual pickable paths (see the TUI's pick overlay) instead of a blind text
+// field.
+func (e *Engine) Files(ctx context.Context, ref string) ([]string, error) {
+	target, err := e.Resolve(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := e.q.ListManifestEntries(ctx, target)
+	if err != nil {
+		return nil, fmt.Errorf("reading manifest: %w", err)
+	}
+	paths := make([]string, len(entries))
+	for i, ent := range entries {
+		paths[i] = ent.Path
+	}
+	return paths, nil
+}
+
 // Pick brings one file, or one directory subtree, back from a past state
 // without moving HEAD and without touching any other path: the file-level
 // counterpart of Go (docs/design-spec.md §5, §6). Under the write lock it:

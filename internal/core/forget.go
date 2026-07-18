@@ -18,6 +18,13 @@ type ForgetResult struct {
 	StoreDir   string
 	StateCount int
 	Bytes      int64
+	// HeadBehind reports that @ is not the most recently saved snapshot: the
+	// working files match an older point in history, and the NewerStates
+	// snapshots saved after it go down with the store too. Best-effort (false
+	// on a store too damaged to read HEAD), so the prompt still works under
+	// OpenForRepair.
+	HeadBehind  bool
+	NewerStates int
 }
 
 // ForgetStats measures the store without changing anything, so a caller can
@@ -31,7 +38,29 @@ func (e *Engine) ForgetStats(ctx context.Context) (ForgetResult, error) {
 	if err != nil {
 		return ForgetResult{}, err
 	}
-	return ForgetResult{StoreDir: e.storeDir, StateCount: len(states), Bytes: size}, nil
+	res := ForgetResult{StoreDir: e.storeDir, StateCount: len(states), Bytes: size}
+
+	// Is @ the last saved snapshot? Creation order breaks ties by id, the same
+	// (time, id) ordering ULIDs sort by.
+	if head, err := e.q.GetHead(ctx); err == nil && head.Valid {
+		var headAt int64
+		found := false
+		for _, s := range states {
+			if s.ID == head.String {
+				headAt, found = s.CreatedAt, true
+				break
+			}
+		}
+		if found {
+			for _, s := range states {
+				if s.CreatedAt > headAt || (s.CreatedAt == headAt && s.ID > head.String) {
+					res.NewerStates++
+				}
+			}
+			res.HeadBehind = res.NewerStates > 0
+		}
+	}
+	return res, nil
 }
 
 // Forget removes the entire store (docs/design-spec.md §5): every state, all history,

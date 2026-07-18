@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/textfmt"
 )
 
 // newDropCmd builds `spor drop <ref>`, which deletes a state and all its
@@ -54,16 +55,16 @@ func newDropCmd() *cobra.Command {
 			out := styledOut(cmd)
 			if !yes {
 				fmt.Fprintf(out, "Dropping from %s deletes %s.\n",
-					styleAccent.Render(abbrev(plan.Target)),
-					styleBad.Render(fmt.Sprintf("%d %s", plan.StatesToDelete, plural(plan.StatesToDelete, "snapshot", "snapshots"))))
+					th.Accent.Render(textfmt.Abbrev(plan.Target)),
+					th.Bad.Render(fmt.Sprintf("%d %s", plan.StatesToDelete, textfmt.Plural(plan.StatesToDelete, "snapshot", "snapshots"))))
 				if plan.WipesEntireStore {
-					fmt.Fprintln(out, styleMuted.Render("  This wipes ALL history; your working files are left untouched."))
+					fmt.Fprintln(out, th.Muted.Render("  This wipes ALL history; your working files are left untouched."))
 				} else if plan.HeadWillMove {
-					fmt.Fprintf(out, "  HEAD will move to %s and your working files will change to match.\n", styleAccent.Render(abbrev(plan.HeadTarget)))
+					fmt.Fprintf(out, "  HEAD will move to %s and your working files will change to match.\n", th.Accent.Render(textfmt.Abbrev(plan.HeadTarget)))
 				}
-				fmt.Fprintln(out, styleBad.Render("  This cannot be undone."))
+				fmt.Fprintln(out, th.Bad.Render("  This cannot be undone."))
 				if !promptYesNo(cmd.InOrStdin(), out, "Drop?") {
-					fmt.Fprintln(out, styleBad.Render("Aborted; nothing was deleted."))
+					fmt.Fprintln(out, th.Bad.Render("Aborted; nothing was deleted."))
 					return nil
 				}
 			}
@@ -73,12 +74,12 @@ func newDropCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "Dropped %s.\n",
-				styleBad.Render(fmt.Sprintf("%d %s", res.Deleted, plural(res.Deleted, "snapshot", "snapshots"))))
+				th.Bad.Render(fmt.Sprintf("%d %s", res.Deleted, textfmt.Plural(res.Deleted, "snapshot", "snapshots"))))
 			switch {
 			case res.HeadCleared:
-				fmt.Fprintln(out, styleMuted.Render("All history is gone; the next snap starts a fresh timeline."))
+				fmt.Fprintln(out, th.Muted.Render("All history is gone; the next snap starts a fresh timeline."))
 			case res.HeadMovedTo != "":
-				fmt.Fprintf(out, "HEAD is now %s.\n", styleAccent.Render(abbrev(res.HeadMovedTo)))
+				fmt.Fprintf(out, "HEAD is now %s.\n", th.Accent.Render(textfmt.Abbrev(res.HeadMovedTo)))
 			}
 			reportReclaimed(out, res.Reclaimed)
 			return nil
@@ -92,7 +93,7 @@ func newDropCmd() *cobra.Command {
 func reportReclaimed(out io.Writer, gc core.GCResult) {
 	if gc.Removed > 0 {
 		fmt.Fprintf(out, "Reclaimed %s from %s.\n",
-			styleAccent.Render(humanBytes(gc.Bytes)),
-			styleMuted.Render(fmt.Sprintf("%d unreferenced %s", gc.Removed, plural(gc.Removed, "blob", "blobs"))))
+			th.Accent.Render(textfmt.HumanBytes(gc.Bytes)),
+			th.Muted.Render(fmt.Sprintf("%d unreferenced %s", gc.Removed, textfmt.Plural(gc.Removed, "blob", "blobs"))))
 	}
 }

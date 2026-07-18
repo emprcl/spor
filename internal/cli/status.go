@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/textfmt"
 )
 
 // newStatusCmd builds `spor status`, a quick read of whether a watcher is running
@@ -54,41 +55,41 @@ func renderStatus(w io.Writer, st core.StatusResult) {
 	}
 	// count renders a number and its unit, the number picked out like a state id.
 	count := func(n int, one, many string) string {
-		return styleID.Render(fmt.Sprintf("%d", n)) + styleStatusKey.Render(" "+plural(n, one, many))
+		return th.ID.Render(fmt.Sprintf("%d", n)) + th.StatusKey.Render(" "+textfmt.Plural(n, one, many))
 	}
 
-	row(styleStatusKey, "project", st.Root)
+	row(th.StatusKey, "project", st.Root)
 	if st.WatcherRunning {
-		row(styleStatusKey, "watcher", styleStatusOn.Render("running"))
+		row(th.StatusKey, "watcher", th.StatusOn.Render("running"))
 	} else {
-		row(styleStatusKey, "watcher", styleStatusKey.Render("not running"))
+		row(th.StatusKey, "watcher", th.StatusKey.Render("not running"))
 	}
 
 	hist := count(st.StateCount, "snapshot", "snapshots")
 	if st.Tips > 0 {
-		hist += styleStatusKey.Render("  ·  ") + count(st.Tips, "timeline", "timelines")
+		hist += th.StatusKey.Render("  ·  ") + count(st.Tips, "timeline", "timelines")
 	}
-	row(styleStatusKey, "history", hist)
-	row(styleStatusKey, "store", styleID.Render(humanBytes(st.StoreBytes)))
+	row(th.StatusKey, "history", hist)
+	row(th.StatusKey, "store", th.ID.Render(textfmt.HumanBytes(st.StoreBytes)))
 
 	// The @ marker is colored like the current-state marker in `spor log`.
 	if !st.HasHead {
-		row(styleHeadTag, "@", styleStatusKey.Render("no snapshots yet"))
+		row(th.HeadTag, "@", th.StatusKey.Render("no snapshots yet"))
 		return
 	}
-	val := styleID.Render(abbrev(st.Head.ID))
+	val := th.ID.Render(textfmt.Abbrev(st.Head.ID))
 	if st.Head.Label != "" {
-		val += "  " + styleLabel.Render(st.Head.Label)
+		val += "  " + th.Label.Render(st.Head.Label)
 	}
-	val += "  " + styleTime.Render(humanizeSince(st.Head.CreatedAt))
-	row(styleHeadTag, "@", val)
+	val += "  " + th.Time.Render(textfmt.HumanizeSince(st.Head.CreatedAt))
+	row(th.HeadTag, "@", val)
 
 	// A second line places @ within the history: on the tip, or rewound with newer
 	// states ahead that redo/go can move to.
 	if st.Ahead > 0 {
-		row(styleStatusKey, "", count(st.Ahead, "newer snapshot", "newer snapshots")+
-			styleStatusKey.Render(" ahead, redo or go to move forward"))
+		row(th.StatusKey, "", count(st.Ahead, "newer snapshot", "newer snapshots")+
+			th.StatusKey.Render(" ahead, redo or go to move forward"))
 	} else {
-		row(styleStatusKey, "", styleStatusKey.Render("at the tip of its timeline"))
+		row(th.StatusKey, "", th.StatusKey.Render("at the tip of its timeline"))
 	}
 }

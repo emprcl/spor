@@ -22,9 +22,9 @@ complete contents of the project at one moment.
 Experience:
 
 - States are created by a single **snapshot** operation, triggered
-  automatically by a watcher that runs while `spor watch` is open, or manually
-  (`spor snap`) when no watcher is running. Either way the user never writes a
-  commit message or stages anything.
+  automatically by a watcher that runs while something is watching (`spor ui`
+  in watch mode, or `spor watch`), or manually (`spor snap`) when nothing is.
+  Either way the user never writes a commit message or stages anything.
 - Recording happens *while `spor` is running*, in the foreground; closing it
   stops watching. There is no hidden background daemon.
 - Restoring an old state is one command.
@@ -208,6 +208,12 @@ Two triggers call it:
   way with no watcher (a deliberate, git-like rhythm; also what makes it
   scriptable and testable).
 
+Snapshot reports **progress** through an optional callback in four phases —
+scanning the tree, storing content, the whole-store durability sync, and the
+commit — so a front-end can keep a large first snapshot from being a silent
+wait (`spor snap` and `spor watch` draw a progress bar on a terminal; the TUI
+shows an indexing panel).
+
 **No-op suppression** is part of the operation: if the new manifest hash equals
 `HEAD`'s, no state is created. So repeated snapshots with nothing changed,
 mtime touches, saves-in-place, and sub-second edit-then-revert fumbles all
@@ -313,8 +319,14 @@ fs events ──► "dirty" signal ──► debounce timer ──► [ snapshot
   capped snapshot may therefore capture in-progress (torn) files; accepted:
   the next settle records the consistent version, and history keeps both.
 
-Settle window: short (~200-500 ms) but long enough to outlast an atomic-save
-burst or a project-wide save-all.
+**Recording starts with a baseline.** The moment watching begins (`spor watch`
+startup, or the TUI's watch mode turning on), one snapshot runs immediately, so
+the session always starts from a recorded point; no-op suppression makes it
+free when nothing changed since the last state.
+
+Settle window: short (300 ms by default) but long enough to outlast an
+atomic-save burst or a project-wide save-all; the max-debounce cap defaults to
+5 s.
 
 ### Watch mechanics
 
@@ -409,12 +421,12 @@ Intermediate snapshots are intentionally lost; only the start boundary
 
 ### Thin: reduce history to its skeleton
 
-The persistent form of the folding `spor log` already does at display time (§6):
+The persistent form of the hiding `spor log` already does at display time (§6):
 where fold squashes one range you name, thin collapses **every** linear run at
 once, across the whole tree. It keeps only the structurally significant states,
 every **tip** (no children) and **branch point** (two or more children), plus
-every **labeled** state and **`HEAD`** (the same states `log` never folds
-away), and drops the linear in-between states.
+every **labeled** state and **`HEAD`** (the same states `log` never hides),
+and drops the linear in-between states.
 
 1. Compute the keep-set (tips, branch points, labels, `HEAD`); everything else,
    an unlabeled non-`HEAD` state with exactly one child, is dropped.
@@ -459,9 +471,13 @@ profiling demands.
 The command surface is deliberately small and modeled on undo, not Git. There
 is no `commit` (recording is automatic), no `branch`
 (branching is implicit), and no `reset`/`discard` (nothing is ever lost, so
-there is nothing to discard). Anything framed as "working dir vs current state"
-is a dead concept: while `spor watch` is watching, snapshots happen within the
-settle window, so the working tree is continuously kept identical to `@`.
+there is nothing to discard). While something is watching (`spor ui` in watch
+mode, or `spor watch`), snapshots happen within the settle window, so the
+working tree is continuously kept identical to `@` and "working dir vs current
+state" has no meaning. In the manual rhythm (no watcher, `spor snap` by hand)
+the tree *can* drift from `@`; the idiom for "what have I changed since the
+last snapshot?" is to snap first, then diff:
+`spor snap && spor diff @~1`. Diff itself never reads the working tree (below).
 
 ### Referring to a state: `<ref>`
 
@@ -495,21 +511,68 @@ well defined even after a restore to an old state.
 
 ### Commands
 
+**Interactive**:
+
+| Command | Effect |
+|---|---|
+| `spor ui` | open the interactive TUI (below); it offers to watch on startup, and watching is toggled from inside it |
+
 **Everyday** (nearly all usage):
 
 | Command | Effect |
 |---|---|
-| `spor watch` | run the watcher in the foreground, showing the history repainting live as states appear (the same view as `spor log`); Ctrl+C stops watching |
-| `spor snap [-l <label>]` | create one state now, then exit; the manual, scriptable path, only needed when `spor watch` isn't running |
-| `spor log` | show the history newest-first as **swimlanes**: each branch keeps its own column, and long linear runs are folded to their most recent few; marks `@` |
+| `spor watch` | record in the foreground, streaming one line per snapshot; the headless recorder for a spare terminal or a redirected log; Ctrl+C stops watching |
+| `spor snap [-l <label>]` | create one state now, then exit; the manual, scriptable path, only needed when nothing is watching |
+| `spor log` | show the history newest-first as **swimlanes**: each branch keeps its own column, and long linear runs are hidden down to their most recent few; marks `@` |
 | `spor undo [n]` / `spor redo [n]` | step back / forward `n` states (clamped to the history boundary) |
 | `spor go <ref>` | jump to any state |
 | `spor pick <ref> <path>` | bring one file (or directory) back from a state, without moving `@` or touching anything else |
 
-`spor watch` is a live monitor only: it shows states appearing, the settle
-indicator, and where `@` is. A full interactive TUI (navigating and driving
-go/drop/label from within it) is _not yet implemented_; until then, mutations
-are one-shot CLI commands.
+### The interactive TUI (`spor ui`)
+
+`spor ui` is the interactive front-end: the same swimlane tree as `spor log`,
+navigable, with a detail panel for the selected snapshot (its identity, label,
+timing, lineage, and the actions available on it; the panel drops away on a
+narrow terminal). The layout is a one-line status bar (watch/browse indicator,
+project path, history and store size, where `@` sits, and transient
+results/errors), the body, and a one-line key bar; `?` overlays the full key
+reference. Navigation is the arrow keys or `j`/`k`, `g`/`G` for top and
+bottom, and the mouse wheel. It needs a terminal; `spor log` is the printable
+fallback.
+
+New snapshots appear live at the top; a cursor left on the first row keeps
+tracking the newest snapshot as they land. The view also stays honest against
+*other* processes: a 1 s tick probes SQLite's `data_version` and reloads only
+when the store actually changed, so a mutation from another terminal shows up
+within a second without the tick paying for reads.
+
+Watching is a **mode inside it**, not a separate command: on startup, if no
+watcher holds the lock, it asks whether to watch (when another process is
+already watching, the offer is skipped and the status bar says so); `--watch`
+and `--browse` pick the startup mode up front and skip that offer. The `w`
+key toggles watching at any time (acquiring and releasing the watcher lock,
+§8), and the status bar always shows which mode it is in. Turning watching on
+records the baseline snapshot immediately (§4), drawing the indexing progress
+panel while a large first snapshot runs. When not watching, `s` records a
+snapshot by hand (the key is disabled while watching, since the watcher
+records).
+
+Every mutation the TUI offers calls the same core operations as the one-shot
+commands, on the *selected* snapshot: jump (`enter`, confirmed, since go
+rewrites the working tree), diff (`d`, against the snapshot's **parent**: "what
+did this snapshot change", shown full-screen and scrollable; the one-arg CLI
+`diff <ref>` remains ref-to-`@`), label (`l`; submitting an empty value
+removes an existing label), pick (`p`, a
+live search over the files of the snapshot's manifest), drop (`x`) and trim
+(`t`), both confirmed with the exact counts their plans report, undo/redo
+(`u`/`r`), and quit (`q`, confirmed; it also stops watching).
+
+The display-time hiding of long linear runs is interactive: a summary row
+("*n* snaps hidden") expands with `→` and collapses with `←`, and `f` on a
+summary row **folds** that run permanently (the `fold` operation on exactly
+the hidden range, confirmed). `T` runs `thin` (confirmed with its plan). The
+wording is deliberate: the harmless display state is always "hidden", and
+"fold" always means the destructive operation, so the two cannot be confused.
 
 `redo` is intentionally simple: it follows the **most-recently-visited child**
 of `@`, as recorded by the HEAD journal (§2). Because editing after an `undo`
@@ -650,8 +713,10 @@ front-ends call it:
 - **One-shot CLI** (`spor snap`, `spor go`, …): open store, call one
   op, exit.
 - **The watcher** (`spor watch`): a foreground process whose debounce timer
-  calls `snap` on settle, alongside the live log. Ctrl+C stops it.
-- **A future TUI**: interactive keys calling the same ops.
+  calls `snap` on settle, streaming one line per recorded state. Ctrl+C stops it.
+- **The TUI** (`spor ui`, §6): interactive keys calling the same ops; it runs
+  the same watcher pipeline in-process when watching is toggled on, holding the
+  watcher lock exactly as `spor watch` does.
 
 ### Locking
 
@@ -734,9 +799,10 @@ open, it is compared against the version embedded in the binary:
 
 ### Garbage collection
 
-Part of the core, since drop/fold leave blobs unreferenced (and history
+Part of the core, since the history edits (§5) leave blobs unreferenced (and history
 grows without bound). GC is a **mark-sweep** over blobs reachable from all
-surviving states, run after every drop/fold and available as a command. GC
+surviving states, run after every drop, trim, fold, and thin, and available as
+a command. GC
 takes the write lock like any other mutating operation, so it can never race an
 in-flight snap (whose blobs land on disk before its state row commits). A
 blob is never treated as unreferenced without a full reachability pass, and
@@ -853,17 +919,18 @@ The core is implemented: recording (manual `snap` and the `watch` watcher), the
 stat cache, ignore rules (built-in defaults plus root `.sporignore`), the
 zstd-compressed content-addressed blob store, the state tree and HEAD journal,
 `go` / `undo` / `redo`, `pick`, `drop` / `trim` / `fold` / `thin`, `label`, `diff`, `log`
-(newest-first swimlanes with folding), `status`, `verify`, `gc`, `forget`,
-advisory file locking, schema versioning and migrations, crash-safe write
-ordering with an on-open consistency check, and concurrent readers alongside the
-single serialized writer.
+(newest-first swimlanes with hidden linear runs), `status`, `verify`, `gc`,
+`forget`, advisory file locking, schema versioning and migrations, crash-safe
+write ordering with an on-open consistency check, and concurrent readers
+alongside the single serialized writer. The **interactive TUI** (`spor ui`, §6)
+is implemented: tree navigation, the watch mode with its startup offer and `w`
+toggle, and in-view snap, go, diff, label/unlabel, pick (searchable), drop,
+trim, fold-a-hidden-run, thin, and undo/redo.
 
 The following are described above but **not yet implemented** (planned):
 
 - **Sync** (§6, §7): `push`, `pull`, `remote add`, `remote drop`, and the
   server. None of it exists yet.
-- **Interactive TUI** (§6, §8): `watch` is a live monitor only; there is no
-  keyboard-driven navigation or in-view mutation.
 - **Attachments** (§9): pinning reference media to a state; the `attach` /
   `attachments` / `detach` / `export` commands and the `attachments` table.
 - **Symlinks** (§2): only regular files are tracked.

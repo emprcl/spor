@@ -69,6 +69,14 @@ __pycache__/
 // never an error. Anything else (permissions, I/O) aborts: fix the file or
 // ignore it via .sporignore. See docs/design-spec.md §4.
 func Walk(root string) ([]File, error) {
+	return WalkProgress(root, nil)
+}
+
+// WalkProgress is Walk with a progress callback: onFound (when non-nil) is
+// called with the running number of tracked files as they are discovered, so a
+// front-end can show that a scan over a large tree is moving. It is called from
+// the walk's single goroutine; throttling is the caller's job.
+func WalkProgress(root string, onFound func(found int)) ([]File, error) {
 	m := newMatcher(root)
 
 	var files []File
@@ -122,6 +130,9 @@ func Walk(root string) ([]File, error) {
 			MtimeNs: info.ModTime().UnixNano(),
 			Inode:   inodeOf(info),
 		})
+		if onFound != nil {
+			onFound(len(files))
+		}
 		return nil
 	})
 	if err != nil {

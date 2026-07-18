@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/textfmt"
 )
 
 // newGCCmd builds `spor gc`, which reclaims storage from blobs no state
@@ -41,12 +42,12 @@ func newGCCmd() *cobra.Command {
 			}
 			out := styledOut(cmd)
 			if res.Removed == 0 {
-				fmt.Fprintln(out, styleMuted.Render("Nothing to reclaim; every blob is still referenced."))
+				fmt.Fprintln(out, th.Muted.Render("Nothing to reclaim; every blob is still referenced."))
 				return nil
 			}
 			fmt.Fprintf(out, "Reclaimed %s from %s.\n",
-				styleAccent.Render(humanBytes(res.Bytes)),
-				styleMuted.Render(fmt.Sprintf("%d unreferenced %s", res.Removed, plural(res.Removed, "blob", "blobs"))))
+				th.Accent.Render(textfmt.HumanBytes(res.Bytes)),
+				th.Muted.Render(fmt.Sprintf("%d unreferenced %s", res.Removed, textfmt.Plural(res.Removed, "blob", "blobs"))))
 			return nil
 		},
 	}

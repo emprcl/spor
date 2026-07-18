@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/emprcl/spor/internal/core"
+	"github.com/emprcl/spor/internal/textfmt"
 )
 
 // newVerifyCmd builds `spor verify`, the store integrity check (docs/design-spec.md §8).
@@ -42,7 +43,7 @@ func newVerifyCmd() *cobra.Command {
 			if !res.OK() {
 				// Non-zero exit for scripts; the details are already printed above.
 				return fmt.Errorf("verification found %d %s",
-					len(res.Issues), plural(len(res.Issues), "problem", "problems"))
+					len(res.Issues), textfmt.Plural(len(res.Issues), "problem", "problems"))
 			}
 			return nil
 		},
@@ -52,24 +53,24 @@ func newVerifyCmd() *cobra.Command {
 // renderVerify prints the check summary and any issues found.
 func renderVerify(w io.Writer, res core.VerifyResult) {
 	summary := fmt.Sprintf("%d %s, %d %s",
-		res.StatesChecked, plural(res.StatesChecked, "snapshot", "snapshots"),
-		res.BlobsChecked, plural(res.BlobsChecked, "blob", "blobs"))
+		res.StatesChecked, textfmt.Plural(res.StatesChecked, "snapshot", "snapshots"),
+		res.BlobsChecked, textfmt.Plural(res.BlobsChecked, "blob", "blobs"))
 
 	if res.OK() {
-		fmt.Fprintln(w, styleVerifyOK.Render("✓ store is intact")+"  "+styleStatusKey.Render("("+summary+" checked)"))
+		fmt.Fprintln(w, th.VerifyOK.Render("✓ store is intact")+"  "+th.StatusKey.Render("("+summary+" checked)"))
 		return
 	}
 
-	fmt.Fprintln(w, styleStatusKey.Render("checked "+summary))
+	fmt.Fprintln(w, th.StatusKey.Render("checked "+summary))
 	fmt.Fprintln(w)
 	for _, iss := range res.Issues {
 		loc := ""
 		if iss.State != "" {
-			loc = "  " + styleStatusKey.Render("["+abbrev(iss.State)+"]")
+			loc = "  " + th.StatusKey.Render("["+textfmt.Abbrev(iss.State)+"]")
 		}
 		if iss.Path != "" {
-			loc += " " + styleStatusKey.Render(iss.Path)
+			loc += " " + th.StatusKey.Render(iss.Path)
 		}
-		fmt.Fprintln(w, styleVerifyBad.Render("✗ "+iss.Detail)+loc)
+		fmt.Fprintln(w, th.VerifyBad.Render("✗ "+iss.Detail)+loc)
 	}
 }
