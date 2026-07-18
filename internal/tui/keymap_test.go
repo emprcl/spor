@@ -1,9 +1,10 @@
 package tui
 
 import (
-	"github.com/emprcl/spor/internal/view"
 	"strings"
 	"testing"
+
+	"github.com/emprcl/spor/internal/view"
 )
 
 // TestHelpBar locks in the wiring from the keymap to the bottom help bar: each mode

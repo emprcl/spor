@@ -1,9 +1,10 @@
 package tui
 
 import (
-	"github.com/emprcl/spor/internal/view"
 	"strings"
 	"testing"
+
+	"github.com/emprcl/spor/internal/view"
 
 	"github.com/charmbracelet/x/ansi"
 

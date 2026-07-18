@@ -1,8 +1,9 @@
 package tui
 
 import (
-	"github.com/emprcl/spor/internal/view"
 	"testing"
+
+	"github.com/emprcl/spor/internal/view"
 
 	"github.com/emprcl/spor/internal/core"
 )

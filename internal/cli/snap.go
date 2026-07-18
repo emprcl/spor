@@ -119,7 +119,7 @@ func (p *snapProgress) update(phase core.SnapPhase, done, total int) {
 		return // let a fast snapshot finish before drawing anything
 	}
 	samePhase := p.shown && phase == p.phase
-	if samePhase && !(total > 0 && done == total) && now.Sub(p.last) < 60*time.Millisecond {
+	if samePhase && (total <= 0 || done != total) && now.Sub(p.last) < 60*time.Millisecond {
 		return // throttle intermediate redraws
 	}
 	p.last = now
