@@ -129,7 +129,7 @@ just works once you're inside a tracked project.
 ### Walkthrough
 
 The same session, two ways: first inside the interactive view (`spor ui`),
-then with one-shot commands. Both work on the same history and mix freely — a
+then with one-shot commands. Both work on the same history and mix freely, a
 command run from another terminal shows up in an open `spor ui` within a
 second.
 

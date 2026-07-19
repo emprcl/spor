@@ -208,9 +208,9 @@ Two triggers call it:
   way with no watcher (a deliberate, git-like rhythm; also what makes it
   scriptable and testable).
 
-Snapshot reports **progress** through an optional callback in four phases —
+Snapshot reports **progress** through an optional callback in four phases,
 scanning the tree, storing content, the whole-store durability sync, and the
-commit — so a front-end can keep a large first snapshot from being a silent
+commit, so a front-end can keep a large first snapshot from being a silent
 wait (`spor snap` and `spor watch` draw a progress bar on a terminal; the TUI
 shows an indexing panel).
 
