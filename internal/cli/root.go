@@ -13,6 +13,7 @@ const (
 	groupEveryday    = "everyday"
 	groupInspect     = "inspect"
 	groupHistory     = "history"
+	groupSync        = "sync"
 	groupStartOver   = "startover"
 	groupMaintenance = "maintenance"
 	groupOther       = "other"
@@ -64,6 +65,7 @@ func Root() *cobra.Command {
 		&cobra.Group{ID: groupEveryday, Title: "Common"},
 		&cobra.Group{ID: groupInspect, Title: "Naming & inspecting"},
 		&cobra.Group{ID: groupHistory, Title: "History editing"},
+		&cobra.Group{ID: groupSync, Title: "Sync"},
 		&cobra.Group{ID: groupStartOver, Title: "Starting over"},
 		&cobra.Group{ID: groupMaintenance, Title: "Maintenance"},
 		&cobra.Group{ID: groupOther, Title: "Other"},
@@ -87,6 +89,8 @@ func Root() *cobra.Command {
 		newLabelCmd(), newDiffCmd(), newStatusCmd())
 	addGroup(groupHistory,
 		newDropCmd(), newTrimCmd(), newFoldCmd(), newThinCmd())
+	addGroup(groupSync,
+		newPushCmd(), newPullCmd(), newRemoteCmd())
 	addGroup(groupStartOver,
 		newForgetCmd())
 	addGroup(groupMaintenance,

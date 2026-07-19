@@ -632,13 +632,18 @@ It refuses while a `spor watch` is running, and because it is irreversible it
 confirms and reports how much will be deleted. It never touches your working
 files, only `.spor/`.
 
-**Sync** (optional, see §7), _not yet implemented_:
+**Sync** (optional, see §7):
 
 | Command | Effect |
 |---|---|
-| `spor push` / `spor pull` | sync states and blobs with the server |
-| `spor remote add <url>` | configure the server |
-| `spor remote drop <ref>` | delete a subtree **on the server** (sync is otherwise additive-only) |
+| `spor push` | send this machine's history to the server |
+| `spor pull` | bring the server's history to this machine |
+| `spor remote` | show the configured server |
+| `spor remote add <url>` | configure the server (`--project` to join an existing one, `--token` for auth) |
+| `spor remote forget` | stop syncing; history is left alone on both sides |
+
+There is no `remote drop`: deletions propagate, so removing history from the
+server is deleting it locally and pushing.
 
 **Attachments** (pin reference media to a state, see §9), _not yet implemented_:
 
@@ -660,41 +665,129 @@ files, only `.spor/`.
 
 ## 7. Sync
 
-> _Not yet implemented (planned)._ This section describes a future capability;
-> none of the `push` / `pull` / `remote` commands or the server exist yet (§11).
-
-Optional single-user **push/pull** to a server, purely for backup and moving
-history between the same user's machines. **No collaboration**: one author, no
-concurrent-editor merges, no conflict resolution. This is what keeps it simple;
-the hard parts of sync don't exist here.
+Optional single-user **push/pull** to a server, for backup and for moving history
+between the same user's machines. **No collaboration**: one author, no
+concurrent-editor merges. That is what keeps it small; the hard parts of
+multi-writer sync don't exist here.
 
 Opaque ULIDs don't undermine it: they are globally unique (no cross-machine
 collisions), divergence between machines is just another branch in the tree the
-model already supports, and blobs still dedup by content on the server (states
-are tiny, so not deduping them costs nothing).
+model already supports, and blobs dedup by content on the server.
 
-**The server is dumb**, a content-addressed blob store plus a table of state
-rows, single-token auth (an object store + small index works equally well):
+### The two halves travel differently
+
+Blobs hold all the bytes, so they stay **content-addressed and additive**. The
+state graph is tiny by comparison, a handful of small rows per state, so it is
+sent **whole** as one document versioned by a `generation` counter, and push is a
+**compare-and-swap** on that counter.
+
+Sending the graph whole is not an optimization, it is what makes the feature
+correct. History editing is destructive and mutating: `thin` deletes states and
+re-parents the survivors, and `drop`/`trim`/`fold` use the same machinery. An id
+set-difference cannot see a re-parent, because the id is present on both sides,
+and cannot express a deletion at all. A design that diffed id sets would let two
+machines diverge silently, and would undo every `thin` on the next pull.
+
+The invariant this rests on: for a given state id, `created_at` and
+`manifest_hash` are **immutable**. `fold` mints a new state that reuses an
+existing manifest hash rather than rewriting one in place. Only `parent_id` and
+`label` ever change, so only those are ever merged, and disagreement on the
+immutable fields means a corrupt store rather than a conflict.
+
+### The server is dumb
+
+A content-addressed blob store plus one small versioned document per project,
+with single-token bearer auth (an object store plus a small index works equally
+well):
 
 ```
-HEAD/PUT/GET  /blobs/<sha256>     blob exists? / upload / download
-GET           /states             list state IDs the server has
-PUT/GET       /states/<ulid>      upload / download a state (metadata + manifest)
+GET   /p/<project>/graph           -> {generation, states:[...]}
+PUT   /p/<project>/graph           {base_generation, states:[...]}
+                                   -> 200 {generation} | 409 {generation}
+POST  /p/<project>/blobs/missing   {hashes:[...]} -> {missing:[...]}
+GET   /p/<project>/blobs/<sha256>  download
+PUT   /p/<project>/blobs/<sha256>  upload
 ```
 
-- **Push:** diff local state IDs against the server's; for each missing state,
-  upload its blobs **first**, then the state row. Blobs before referencing
-  states, parents before children: the local integrity invariant, on the wire.
-- **Pull:** the mirror image, parents-first.
-- The missing-set step is a plain ID set-difference; start naive (exchange the
-  full set), optimize with a cursor later if needed.
-- `HEAD` is **local and per-machine**, never synced as authoritative; so are
-  the HEAD journal and the stat cache. Only states and blobs travel.
+**Manifests travel as ordinary blobs.** A manifest's canonical serialization is
+exactly the byte stream `manifest_hash` already digests (§2), so the blob's
+content hash *is* the state's manifest hash. Manifests therefore need no endpoint
+of their own, dedup across states for free, and verify themselves on arrival.
 
-**Sync is additive-only**, it never deletes. To make the server forget a
-subtree, run `drop` there explicitly (`spor remote drop <id>`); otherwise a
-later pull re-downloads a state you dropped locally. Upside: the server doubles as a
-full archive. Tombstones are out of scope for v1.
+The **project id** is a ULID minted by the first machine and passed to the others
+with `spor remote add --project`. It namespaces a project on a shared server.
+
+### Push
+
+1. Read the local graph and work out every blob it depends on.
+2. Ask the server which of those it lacks (batched, one round-trip per 500).
+3. Upload content blobs, then the manifests naming them, then swap the graph.
+   Each layer is complete before anything points at it, so an interrupted push
+   leaves unreferenced blobs, never a dangling reference.
+4. The swap is a compare-and-swap on `generation`. If the server has moved since
+   this machine last synced, push **stops and asks for a pull** rather than
+   overwriting another machine's work. `--force` overrides.
+
+### Pull
+
+A **three-way merge** between the last-synced graph (the *base*), the local
+graph, and the server's. The base is stored locally in `sync_base`, spor's
+equivalent of a remote-tracking branch, and it is what makes deletion
+expressible: without it, "state X is absent locally" is ambiguous between "I
+deleted it" and "the server added it".
+
+| base | local | server | result |
+|---|---|---|---|
+| absent | present | absent | local addition, keep |
+| absent | absent | present | server addition, keep |
+| present | absent | present | deleted locally, propagate |
+| present | present | absent | deleted on the server, propagate |
+| present | present, changed | present, changed differently | **conflict** |
+
+Deleting on one side while the other *edited* the same state is also a conflict:
+dropping it would silently discard the edit. Conflicts stop the pull and name
+both escape hatches; `pull --force` settles them in the server's favor, but it
+still keeps local states that are not actually in dispute.
+
+Two rules override every deletion:
+
+- **Ancestors of kept states are resurrected.** The other machine cannot have
+  known about a state this one added beneath the one it deleted, and `parent_id`
+  is `ON DELETE RESTRICT`.
+- **Local `HEAD` and its ancestors are pinned.** `head` is `ON DELETE SET NULL`
+  and `head_history` is `ON DELETE CASCADE`, so an unpinned delete would quietly
+  null HEAD and prune the journal.
+
+**Labels** carry a `UNIQUE` index, so a name that ends up on two states has to
+give way: the server's assignment wins and the other state is left unlabeled,
+reported loudly. A cleared label is cheap to re-add; a blocked pull is not.
+
+After a pull the base becomes **the server's graph**, not the merged result, so
+the next push still sees the local additions the merge kept.
+
+`HEAD` is **local and per-machine**, never synced; so are the HEAD journal and
+the stat cache. A freshly pulled store therefore has no current state, because
+setting one without materializing the working tree would make `@` disagree with
+what is on disk. Use `spor go <ref>` once.
+
+### Ordering and locking
+
+Inserts run parents-before-children and deletes children-before-parents, both
+forced by `ON DELETE RESTRICT` with foreign keys on. Labels are cleared before
+anything claims them, or the UNIQUE index rejects a name moving between states.
+
+**Network I/O never happens under the write lock.** A push of a large tree would
+otherwise block `spor watch` for its whole duration. Both operations read and
+transfer unlocked, then take the lock briefly to commit. Pull re-runs the merge
+against a freshly read local graph under that lock, because a snapshot may have
+landed while the download ran.
+
+### What sync does not do
+
+It never touches the working tree, and it never moves `HEAD`. Deleting history on
+the server is deleting it locally and pushing; there are no tombstones, and the
+server keeps only the current graph, so a mistaken `thin` followed by a `push` is
+not recoverable from the server.
 
 ---
 
@@ -929,8 +1022,9 @@ trim, fold-a-hidden-run, thin, and undo/redo.
 
 The following are described above but **not yet implemented** (planned):
 
-- **Sync** (§6, §7): `push`, `pull`, `remote add`, `remote drop`, and the
-  server. None of it exists yet.
+- **The sync server** (§7): the client half (`push`, `pull`, `remote`) is
+  implemented; no server ships in this repo. §7 specifies the wire protocol a
+  server must implement.
 - **Attachments** (§9): pinning reference media to a state; the `attach` /
   `attachments` / `detach` / `export` commands and the `attachments` table.
 - **Symlinks** (§2): only regular files are tracked.

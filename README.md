@@ -318,6 +318,14 @@ same thing from your terminal.
 - `spor fold <a> <b>`: squash the run of snapshots from `a` to `b` into one
 - `spor thin`: collapse linear runs across the whole history, keeping only tips, branch points, and named snapshots
 
+**Sync** (optional, see [Syncing between machines](#syncing-between-machines))
+
+- `spor push`: send your history to the server
+- `spor pull`: bring the server's history to this machine
+- `spor remote`: show the configured server
+- `spor remote add <url> [--project <id>] [--token <token>]`: point the project at a server
+- `spor remote forget`: stop syncing (your history is left alone on both sides)
+
 **Starting over**
 
 - `spor forget`: delete all of Spor's history for the project (your files are kept)
@@ -330,6 +338,50 @@ same thing from your terminal.
 A `<ref>` can be `@` (the current snapshot), `@~n` (`n` snapshots back), a
 duration like `2h` or `3d`, a snapshot id (or a short prefix of one), or a
 label. Run `spor <command> --help` for the full details and more examples.
+
+### Syncing between machines
+
+Sync is optional, and it is **not collaboration**. It does two things: keep a
+copy of your history on a server, and let you carry it between your own
+machines. One author, no merging of other people's work.
+
+On the first machine, point the project at a server and push:
+
+```sh
+spor remote add https://spor.example.com --token "$TOKEN"
+spor push
+```
+
+`remote add` prints a **project id**. On your other machine, run Spor in an empty
+directory and join that same project:
+
+```sh
+spor remote add https://spor.example.com --project 01J2X... --token "$TOKEN"
+spor pull
+spor go <ref>   # pull brings the history; this puts the files on disk
+```
+
+From then on it's `spor push` and `spor pull`. A few things worth knowing:
+
+- **Removals travel too.** If you `thin` or `drop` on the laptop and push, the
+  desktop loses those snapshots on its next pull, and gets the disk space back.
+  The server keeps only your current history, so a `thin` you regret is not
+  recoverable from it.
+- **Snapping on both machines is fine.** You get a branch, exactly as if you had
+  branched on one machine. Nothing is thrown away.
+- **Nothing you're standing on is ever removed.** A pull will not delete the
+  snapshot you're on, or anything your own snapshots build from, even if the
+  other machine deleted it.
+- **Your files are never touched.** Pull only changes the history; use `spor go`
+  to move the working tree.
+- **If both machines rewrote the same history**, the pull stops and tells you,
+  rather than guessing. `spor pull --force` takes the server's version;
+  `spor push --force` replaces it with this machine's.
+- Your token is stored in your user config directory, never in the project, so
+  it can't leak into a shared or cloud-synced folder. `$SPOR_TOKEN` overrides it.
+
+Spor doesn't ship a server; the protocol a server has to implement is small and
+is specified in the [design spec](docs/design-spec.md) (§7).
 
 ### Ignoring files
 

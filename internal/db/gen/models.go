@@ -42,3 +42,19 @@ type State struct {
 	ManifestHash string
 	Label        sql.NullString
 }
+
+type Sync struct {
+	ID        int64
+	ProjectID sql.NullString
+	RemoteUrl sql.NullString
+	SyncedGen int64
+	SyncedAt  sql.NullInt64
+}
+
+type SyncBase struct {
+	StateID      string
+	ParentID     sql.NullString
+	CreatedAt    int64
+	ManifestHash string
+	Label        sql.NullString
+}

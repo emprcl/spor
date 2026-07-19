@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -37,6 +38,10 @@ type Engine struct {
 	db    *sql.DB
 	q     *gen.Queries
 	blobs *blob.Store
+
+	// httpClient is the transport sync uses. Nil means net/http's default, which
+	// is what every real run uses; tests point it at a fake server.
+	httpClient *http.Client
 
 	// probeConn is the dedicated connection DataVersion reads through, pinned
 	// out of the pool because the pragma it reads is per-connection.
