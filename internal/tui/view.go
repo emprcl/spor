@@ -16,10 +16,10 @@ import (
 	"github.com/emprcl/spor/internal/view"
 )
 
-// This file renders the TUI. Layout is three stacked bands: a one-line status bar,
-// the body (tree on the left, detail panel on the right), and a one-line help bar.
-// The diff overlay takes the whole screen; the confirm/prompt/help overlays are
-// boxes centered over the body.
+// This file renders the TUI. Layout is stacked bands: a one-line status bar with the
+// metadata line under it, the body (tree on the left, detail panel on the right),
+// and a one-line help bar. The diff overlay takes the whole screen; the confirm/
+// prompt/help overlays are boxes centered over the body.
 
 // View composes the current frame. Everything is drawn to fixed cell dimensions so
 // the vertical/horizontal joins line up exactly.
@@ -30,10 +30,11 @@ func (m *model) View() tea.View {
 	if m.mode == modeDiff {
 		return altView(m.viewDiff())
 	}
-	// A blank line sits under the status bar and above the help bar, so the body
-	// breathes between the two chrome lines.
+	// A blank line sits under the metadata line and above the help bar, so the body
+	// breathes between the chrome bands.
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		m.viewStatusBar(),
+		m.viewMetaBar(),
 		"",
 		m.viewMiddle(),
 		"",
@@ -54,9 +55,10 @@ func altView(s string) tea.View {
 // ---- dimensions -----------------------------------------------------------
 
 // bodyHeight is the space left for the body between the chrome: the status bar, the
-// help bar, and the blank margin above each of them (four lines total).
+// metadata line, the help bar, and the blank margin above each of the body and the
+// help bar (five lines total).
 func (m *model) bodyHeight() int {
-	if h := m.height - 4; h > 0 {
+	if h := m.height - 5; h > 0 {
 		return h
 	}
 	return 1
@@ -84,10 +86,10 @@ func (m *model) treeWidth() int {
 	return 1
 }
 
-// ---- status & help bars ---------------------------------------------------
+// ---- status, metadata & help bars ------------------------------------------
 
 // viewStatusBar draws the top line: the watch/browse indicator, the project path,
-// the history size, where @ sits, and any transient note.
+// and any transient note.
 func (m *model) viewStatusBar() string {
 	var b strings.Builder
 	if m.watching {
@@ -98,14 +100,23 @@ func (m *model) viewStatusBar() string {
 	}
 	b.WriteString(m.sty.WatchPath.Render(prettyPath(m.root)))
 
-	sep := m.sty.StatusKey.Render("   ")
+	if note := m.statusNote(); note != "" {
+		b.WriteString(m.sty.StatusKey.Render("   ") + note)
+	}
+	return fitLine(b.String(), m.width)
+}
+
+// viewMetaBar draws the line under the status bar: the history size, the store's
+// disk use, and where @ sits. It is styled muted, quieter than the status bar above
+// it, so it reads as ambient context rather than something to act on.
+func (m *model) viewMetaBar() string {
+	sep := m.sty.StatusKey.Render(" · ")
 
 	stats := fmt.Sprintf("%d %s", m.status.StateCount, textfmt.Plural(m.status.StateCount, "snap", "snaps"))
 	if m.status.Tips > 0 {
 		stats += fmt.Sprintf(" · %d %s", m.status.Tips, textfmt.Plural(m.status.Tips, "timeline", "timelines"))
 	}
 	stats += " · " + textfmt.HumanBytes(m.status.StoreBytes)
-	b.WriteString(sep + m.sty.StatusKey.Render(stats))
 
 	pos := "at tip"
 	switch {
@@ -114,12 +125,8 @@ func (m *model) viewStatusBar() string {
 	case m.status.Ahead > 0:
 		pos = fmt.Sprintf("%d ahead", m.status.Ahead)
 	}
-	b.WriteString(sep + m.sty.StatusKey.Render("@ "+pos))
 
-	if note := m.statusNote(); note != "" {
-		b.WriteString(sep + note)
-	}
-	return fitLine(b.String(), m.width)
+	return fitLine("  "+m.sty.StatusKey.Render(stats)+sep+m.sty.StatusKey.Render("@ "+pos), m.width)
 }
 
 // statusNote is the transient message at the end of the status bar: a watcher error,
