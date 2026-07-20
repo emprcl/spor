@@ -376,6 +376,7 @@ social media, or anywhere else. We'd love to see it!
 Spor uses a few awesome packages:
  - [spf13/cobra](https://github.com/spf13/cobra) for the CLI
  - [charmbracelet/fang](https://github.com/charmbracelet/fang) for CLI styling and help
+ - [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) and [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) for the interactive view
  - [charm.land/lipgloss](https://github.com/charmbracelet/lipgloss) and [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) for terminal colors
  - [fsnotify/fsnotify](https://github.com/fsnotify/fsnotify) for watching file changes in realtime
  - [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) for the embedded, pure-Go SQLite driver
