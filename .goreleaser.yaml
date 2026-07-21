@@ -60,12 +60,22 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/emprcl/spor"
-    description: "Simple, automatic versioning tool for exploratory work"
+    description: "Infinite undo for your whole project"
     license: "MIT"
     install: |
       bin.install "spor"
     test: |
       system "#{bin}/spor", "--version"
+
+scoops:
+  - name: spor
+    repository:
+      owner: emprcl
+      name: scoop-bucket
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/emprcl/spor"
+    description: "Infinite undo for your whole project"
+    license: "MIT"
 
 release:
   github:

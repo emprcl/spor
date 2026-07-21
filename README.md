@@ -74,6 +74,13 @@ brew trust emprcl/tap
 brew install spor
 ```
 
+#### Scoop (Windows)
+
+```powershell
+scoop bucket add emprcl https://github.com/emprcl/scoop-bucket
+scoop install spor
+```
+
 ### Manual installation
 
 #### Linux & macOS
@@ -94,9 +101,6 @@ sudo mv spor /usr/local/bin/
 ```
 
 #### Windows
-
-> _Spor's history view uses colors and box-drawing characters, so a terminal like
-> Windows Terminal with a good monospace font renders it best._
 
 Unzip the last [windows release](https://github.com/emprcl/spor/releases) and, in
 the same directory, run:
