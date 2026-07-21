@@ -4,9 +4,17 @@
 
 :notebook: **[User Manual](https://empr.cl/spor/)**
 
-Spor is a simple, automatic versioning tool for exploratory work, for when
-you're trying things out, backtracking, and changing direction without a plan
-mapped out in advance, and you don't want to lose where you've been.
+Spor is infinite undo for your whole project. It watches your files while you
+work and saves a snapshot every time something changes, so every past state is
+recoverable. Unlike an editor's undo, it spans every file at once, persists
+across editors and reboots, has no step limit, and lets you jump back to an
+earlier state and continue from there in a different direction without losing
+the path you came from.
+
+It's meant for the kind of work where you don't have a plan mapped out in
+advance: you try something, see how it goes, back out when it doesn't, and try a
+different direction, without wanting to lose any of the versions you passed
+through along the way.
 
 **_Spor is a work-in-progress. The command surface and on-disk format should not
 be considered stable until 1.0._**
@@ -17,34 +25,27 @@ _Feel free to [open an issue](https://github.com/emprcl/spor/issues/new)._
   <img src="/docs/screenshot.png" width="50%">
 </p>
 
-It works differently from traditional version control like
-[Git](https://git-scm.com/). There are no commits to write, nothing to stage, no
-branches to manage. Instead, Spor watches your project while you work: it
-automatically saves a snapshot every time something changes (recording stops
-when you stop watching), building up your history as a tree you can navigate.
-You can jump back to any past moment, pick up from there, and go a different
-way. You can think of it as infinite undo for your whole project.
+A tool that keeps project-wide history might sound like version control such as
+[Git](https://git-scm.com/), but Spor isn't that. There are no commits to write,
+nothing to stage, no branches to manage, and no point where you decide something
+is worth saving: it records on its own while you're watching a project, and stops
+when you stop. The history builds up as a tree of snapshots you move around in
+freely, rather than a list of milestones you curated by hand.
 
 Everything is automatic and local. Spor records your history as an immutable
 graph of snapshots as you work, storing each unique file once (deduplicated and
 compressed). Returning to any moment is fast, and history is only ever removed
 when you explicitly ask for it.
 
-Spor was built with creative coding workflows in mind first, but we think the
-same shape, explore, backtrack, don't lose anything, shows up in a lot of other
-work too. We're looking for people to try it in their own workflow and
-tell us where it breaks, where it's confusing, and where it doesn't fit. If
-that's you, we'd love your feedback.
-
-A few workflows it might fit well:
-- **Creative coding**: generative art, shaders, sound patches, experimenting with
-  parameters and reverting fast when a direction doesn't pan out.
-- **Design & prototyping**: iterating on a layout or concept where you want to
-  freely revisit earlier directions.
-- **Writing**: drafts that go through structural rewrites, letting you recover a
-  scrapped version without keeping fifteen file copies.
-- **Data & research notebooks**: exploratory analysis where you want to backtrack
-  after a dead-end path.
+A few workflows it might fit well (we'd love your feedback):
+- **Creative coding**: generative art, shaders, sound patches, dialing in
+  parameters and jumping back the moment one goes nowhere.
+- **Design & prototyping**: iterating on a layout or concept, with earlier
+  directions always a keypress away.
+- **Writing**: drafts that go through structural rewrites, recovering a scrapped
+  passage without keeping fifteen file copies.
+- **Data & research notebooks**: analysis that runs into dead ends, so you can
+  return to the last good point and take another route.
 
 ## Installation
 
